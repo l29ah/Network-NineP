@@ -1,3 +1,5 @@
+module HighNineP where
+
 import qualified Data.ByteString as B
 import FidMap
 import Data.Int
