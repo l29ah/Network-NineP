@@ -2,11 +2,11 @@ module HighNineP where
 
 import qualified Data.ByteString as B
 import FidMap
-import Data.Int
+import Data.Word
 
 data NineFile = NineFile {
-        nineRead :: Int -> Int -> IO (B.ByteString),
-        nineWrite :: Int64 -> B.ByteString -> IO (Int)
+        nineRead :: Word32 -> Word32 -> IO (B.ByteString),
+        nineWrite :: Word64 -> B.ByteString -> IO (Word32)
 }
 
 data NineClient = NineClient {
