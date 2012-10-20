@@ -10,7 +10,7 @@ import Data.NineP
 
 data NineFile =
 	RegularFile {
-        	nineRead :: Word32 -> Word32 -> IO (B.ByteString),
+        	nineRead :: Word64 -> Word32 -> IO (B.ByteString),
         	nineWrite :: Word64 -> B.ByteString -> IO (Word32),
 		remove :: IO (),
 		stat :: IO Stat,
