@@ -7,11 +7,11 @@ import FidMap
 import Data.Map
 import Data.Word
 
-data Qid = Qid Word8 Word32 Word64
+data QID = QID Word8 Word32 Word64
 data NineStat = NineStat {
 		sType :: Word16,
 		sDev :: Word32,
-		sQid :: Qid,
+		sQID :: QID,
 		sMode :: Word32,
 		sATime :: Word32,
 		sMTime :: Word32,
@@ -41,4 +41,4 @@ data NineClient = NineClient {
 }
 
 boringStat :: NineStat
-boringStat = NineStat 0 0 (Qid 0 0 0) 0 0 0 0 "boring" "" "" ""
+boringStat = NineStat 0 0 (QID 0 0 0) 0 0 0 0 "boring" "" "" ""
