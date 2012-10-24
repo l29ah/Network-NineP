@@ -1,5 +1,4 @@
 dist
 \.hi$
-\.hs$
 \.o$
 \.swp$
