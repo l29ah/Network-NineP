@@ -26,6 +26,7 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe
 import Data.NineP
 import Data.Word
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
@@ -45,9 +46,9 @@ data NineFile =
 		wstat :: Stat -> IO (),
 		version :: IO Word32
 	} | Directory {
-		getFiles :: IO (Map String NineFile),
+		getFiles :: IO (Map String NineFile),	-- must include ..
 		remove :: IO (),
-		stat :: IO Stat,
+		stat :: IO Stat,	-- The directory stat must return only stat for .
 		wstat :: Stat -> IO (),
 		version :: IO Word32
 	}
@@ -72,7 +73,7 @@ boringDir :: String -> [(String, NineFile)] -> NineFile
 boringDir name contents = Directory
 	(return $ M.fromList contents)
         (return ())
-        (return $ boringStat {st_name = name})
+        (return $ boringStat {st_name = "."})
         (const $ return ())
 	(return 0)
 
@@ -183,11 +184,17 @@ rwalk (Msg _ t (Twalk fid newfid path)) = do
 rstat :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
 rstat (Msg _ t (Tstat fid)) = do
 	m <- S.get
-	case M.lookup fid m of
+	let f = M.lookup fid m
+	case f of
 		Nothing -> throwError $ ENoFid fid
-		Just f -> do
-			s <- lift $ lift $ stat f
+		Just (RegularFile _ _ _ _ _ _) -> do
+			s <- lift $ lift $ stat $ fromJust f
 			return $ Msg TRstat t $ Rstat $ [s]
+		Just (Directory gF _ _ _ _) -> do
+			contents <- lift $ lift gF
+			s <- lift $ lift $ mapM stat $ map snd $ M.toList contents
+			mys <- lift $ lift $ stat $ fromJust f
+			return $ Msg TRstat t $ Rstat $ mys:s
 
 rclunk (Msg _ t (Tclunk fid)) = do
 	S.modify (M.delete fid)
