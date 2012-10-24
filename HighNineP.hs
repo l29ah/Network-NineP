@@ -1,7 +1,9 @@
 {-# LANGUAGE OverloadedStrings, CPP #-}
 {-# OPTIONS_GHC -pgmP cpp #-}
 
-module HighNineP where
+module HighNineP 
+	( NineFile(..)
+	) where
 
 import Control.Concurrent
 import Control.Concurrent.Chan
@@ -108,12 +110,13 @@ receiver h say = S.evalStateT (iterateUntil id (do
 			TTattach -> (liftIO . say . Msg TRattach t) =<< rattach (Rattach) m
 			TTwalk -> (liftIO . say . Msg TRwalk t) =<< rwalk (Rwalk) m
 			-}
+			TTflush -> return ()	-- not implemented
 #define MSG(x) TT##x -> (liftIO . say . Msg TR##x t) =<< r##x (R##x) m
 			MSG(version)
 			--MSG(attach)
 			--MSG(walk)
 --			MSG(stat)
-			--MSG(clunk)
+			MSG(clunk)
 #undef MSG
 		return False) >> return ()
 	) (M.empty :: Map Word32 Word64)
@@ -130,3 +133,7 @@ rattach c (Tattach fid _ _ _) = do
 	S.modify (M.insert fid q)
 	return $ c $ Qid (typ f) 0 q
 -}
+
+rclunk c (Tclunk fid) = do
+	S.modify (M.delete fid)
+	return $ c
