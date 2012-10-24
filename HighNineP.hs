@@ -18,7 +18,6 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.NineP
 import Data.Word
-import FidMap
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import System.IO
@@ -40,7 +39,7 @@ data NineFile =
 	}
 
 data NineClient = NineClient {
-        fidMap :: FidMap NineFile
+        fidMap :: Map Word32 NineFile
 }
 
 boringStat :: Stat
