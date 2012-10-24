@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, CPP #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -pgmP cpp #-}
 
 module HighNineP 
@@ -102,7 +102,6 @@ doClient cfg h = do
 recvPacket :: Handle -> IO Msg
 recvPacket h = do
 	-- TODO error reporting
-	putStrLn "got packet"
 	s <- B.hGet h 4
 	let l = fromIntegral $ runGet getWord32le $ assert (B.length s == 4) s
 	p <- B.hGet h $ l - 4
@@ -116,34 +115,33 @@ sender get say = forever $ do
 
 receiver :: Config -> Handle -> (Msg -> IO ()) -> IO ()
 receiver cfg h say = evalRWST (iterateUntil id (do
-		W.tell () -- satisfy the typechecker
-		p <- liftIO $ recvPacket h
-		let Msg typ t m = p
-		case typ of
-			TTflush -> return ()	-- not implemented
-			_ -> do
-				r <- runErrorT (case typ of
-				{-
-					TTversion -> (liftIO . say . Msg TRversion t) =<< rversion (Rversion) m
-					TTattach -> (liftIO . say . Msg TRattach t) =<< rattach (Rattach) m
-					TTwalk -> (liftIO . say . Msg TRwalk t) =<< rwalk (Rwalk) m
-					-}
-		--
-		-- #define MSG(x) TT##x -> (liftIO . say . Msg TR##x t) =<< r##x (R##x) m
-		--			MSG(version)
-					TTversion -> rversion p
-		--			MSG(attach)
-					TTattach -> rattach p
-		--			--MSG(walk)
-		----			MSG(stat)
-		--			MSG(clunk))
-		-- #undef MSG
-		 		)
-				case r of
-					(Right response) -> liftIO $ say $ response
-					(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
-		return False) >> return ()
+			W.tell () -- satisfy the typechecker
+			mp <- liftIO $ try $ recvPacket h
+			case mp of
+				Left (e :: SomeException) -> do
+					return $ putStrLn $ show e
+					return True
+				Right p -> do
+					handleMsg say p
+					return False
+		) >> return ()
 	) cfg (M.empty :: Map Word32 NineFile) >> return ()
+
+handleMsg say p = do
+	let Msg typ t m = p
+	case typ of 
+		TTflush -> return ()	-- not implemented
+		_ -> do
+			r <- runErrorT (case typ of
+					TTversion -> rversion p
+					TTattach -> rattach p
+					TTwalk -> rwalk p
+					TTstat -> rstat p
+					TTclunk -> rclunk p
+	 			)
+			case r of
+				(Right response) -> liftIO $ say $ response
+				(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
 
 makeQid :: NineFile -> Qid
 makeQid = const $ Qid 0 0 0
@@ -182,7 +180,15 @@ rwalk (Msg _ t (Twalk fid newfid path)) = do
 			S.modify (M.insert newfid nf)
 			return $ Msg TRwalk t $ Rwalk $ qs
 	
+rstat :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rstat (Msg _ t (Tstat fid)) = do
+	m <- S.get
+	case M.lookup fid m of
+		Nothing -> throwError $ ENoFid fid
+		Just f -> do
+			s <- lift $ lift $ stat f
+			return $ Msg TRstat t $ Rstat $ [s]
 
-rclunk c (Tclunk fid) = do
+rclunk (Msg _ t (Tclunk fid)) = do
 	S.modify (M.delete fid)
-	return $ c
+	return $ Msg TRclunk t $ Rclunk
