@@ -15,7 +15,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
 --import qualified Control.Monad.State.Strict as S
-import Control.Monad.RWS (evalRWST)
+import Control.Monad.RWS (RWST(..), evalRWST)
 import Control.Monad.Reader.Class (asks)
 import qualified Control.Monad.State.Class as S
 import Control.Monad.Trans
@@ -120,19 +120,28 @@ receiver cfg h say = evalRWST (iterateUntil id (do
 		p <- liftIO $ recvPacket h
 		let Msg typ t m = p
 		case typ of
-		{-
-			TTversion -> (liftIO . say . Msg TRversion t) =<< rversion (Rversion) m
-			TTattach -> (liftIO . say . Msg TRattach t) =<< rattach (Rattach) m
-			TTwalk -> (liftIO . say . Msg TRwalk t) =<< rwalk (Rwalk) m
-			-}
 			TTflush -> return ()	-- not implemented
-#define MSG(x) TT##x -> (liftIO . say . Msg TR##x t) =<< r##x (R##x) m
-			MSG(version)
-			MSG(attach)
-			--MSG(walk)
---			MSG(stat)
-			MSG(clunk)
-#undef MSG
+			_ -> do
+				r <- runErrorT (case typ of
+				{-
+					TTversion -> (liftIO . say . Msg TRversion t) =<< rversion (Rversion) m
+					TTattach -> (liftIO . say . Msg TRattach t) =<< rattach (Rattach) m
+					TTwalk -> (liftIO . say . Msg TRwalk t) =<< rwalk (Rwalk) m
+					-}
+		--
+		-- #define MSG(x) TT##x -> (liftIO . say . Msg TR##x t) =<< r##x (R##x) m
+		--			MSG(version)
+					TTversion -> rversion p
+		--			MSG(attach)
+					TTattach -> rattach p
+		--			--MSG(walk)
+		----			MSG(stat)
+		--			MSG(clunk))
+		-- #undef MSG
+		 		)
+				case r of
+					(Right response) -> liftIO $ say $ response
+					(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
 		return False) >> return ()
 	) cfg (M.empty :: Map Word32 NineFile) >> return ()
 
@@ -140,35 +149,39 @@ makeQid :: NineFile -> Qid
 makeQid = const $ Qid 0 0 0
 
 --TODO version check
-rversion c (Tversion s _) = return $ c s "9P2000"
+rversion :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rversion (Msg _ t (Tversion s _)) = return $ Msg TRversion t (Rversion s "9P2000")
 
-{-
-rattach :: (Qid -> VarMsg) -> VarMsg -> S.StateT (Map Word32 Word64) IO VarMsg
--}
-rattach c (Tattach fid _ _ _) = do
-	--q <- asks rootQIDP
-	--mf <- asks mkFile
-	--f <- lift $ mf q
+rattach :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rattach (Msg _ t (Tattach fid _ _ _)) = do
 	root <- asks root
 	S.modify (M.insert fid root)
-	--return $ c $ Qid (typ f) 0 q
-	return $ c $ makeQid root
+	return $ Msg TRattach t $ Rattach $ makeQid root
 
 --walk :: [String] -> NineFile -> NineFile
-walk :: [String] -> NineFile -> ErrorT NineError IO NineFile
-walk [] f = return f
+walk :: [Qid] -> [String] -> NineFile -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) (NineFile, [Qid])
+walk qs [] f = return (f, qs)
 --walk (x:[]) (RegularFile _ _ _ _ _ _) = return f
-walk (x:xs) (RegularFile _ _ _ _ _ _) = throwError ENotADir
-walk (x:xs) (Directory gF _ _ _ _) = do
-	m <- lift gF
+walk qs (x:xs) (RegularFile _ _ _ _ _ _) = throwError ENotADir
+walk qs (x:xs) (Directory gF _ _ _ _) = do
+	m <- lift $ lift gF
 	case M.lookup x m of
 		Nothing -> throwError $ ENoFile x
 		Just f -> do
-			walk xs f
+			walk ((makeQid f):qs) xs f
 
---rwalk c (Twalk fid newfid path) = do
---	let file 
---	S.modify (M.insert newfid file)
+walk' = walk []
+
+rwalk :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rwalk (Msg _ t (Twalk fid newfid path)) = do
+	m <- S.get
+	case M.lookup fid m of
+		Nothing -> throwError $ ENoFid fid
+		Just f -> do
+			(nf, qs) <- walk' path f
+			S.modify (M.insert newfid nf)
+			return $ Msg TRwalk t $ Rwalk $ qs
+	
 
 rclunk c (Tclunk fid) = do
 	S.modify (M.delete fid)
