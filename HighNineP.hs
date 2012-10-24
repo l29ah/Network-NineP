@@ -32,6 +32,8 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 --import Network.Socket.ByteString
 import System.IO
 
+import Error
+
 import Debug.Trace
 
 data NineFile =
@@ -151,6 +153,22 @@ rattach c (Tattach fid _ _ _) = do
 	S.modify (M.insert fid root)
 	--return $ c $ Qid (typ f) 0 q
 	return $ c $ makeQid root
+
+--walk :: [String] -> NineFile -> NineFile
+walk :: [String] -> NineFile -> ErrorT NineError IO NineFile
+walk [] f = return f
+--walk (x:[]) (RegularFile _ _ _ _ _ _) = return f
+walk (x:xs) (RegularFile _ _ _ _ _ _) = throwError ENotADir
+walk (x:xs) (Directory gF _ _ _ _) = do
+	m <- lift gF
+	case M.lookup x m of
+		Nothing -> throwError $ ENoFile x
+		Just f -> do
+			walk xs f
+
+--rwalk c (Twalk fid newfid path) = do
+--	let file 
+--	S.modify (M.insert newfid file)
 
 rclunk c (Tclunk fid) = do
 	S.modify (M.delete fid)
