@@ -22,6 +22,7 @@ import Control.Monad.Trans
 import qualified Control.Monad.Writer.Class as W
 import Data.Binary.Get
 import Data.Binary.Put
+import Data.Bits
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Map (Map)
@@ -46,7 +47,9 @@ data NineFile =
 		wstat :: Stat -> IO (),
 		version :: IO Word32
 	} | Directory {
-		getFiles :: IO (Map String NineFile),	-- must include ..
+		getFiles :: IO [NineFile],	-- must include ..
+		parent :: IO (Maybe NineFile),
+		descend :: String -> ErrorT NineError IO NineFile,
 		remove :: IO (),
 		stat :: IO Stat,	-- The directory stat must return only stat for .
 		wstat :: Stat -> IO (),
@@ -57,8 +60,10 @@ data Config = Config {
 		root :: NineFile
 	}
 
+type Nine x = ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) x
+
 boringStat :: Stat
-boringStat = Stat 0 0 (Qid 0 0 0) 0 0 0 0 "boring" "" "" ""
+boringStat = Stat 0 0 (Qid 0 0 0) 0o0777 0 0 0 "boring" "root" "root" "root"
 
 boringFile :: String -> NineFile
 boringFile name = RegularFile
@@ -70,12 +75,15 @@ boringFile name = RegularFile
 	(return 0)
 
 boringDir :: String -> [(String, NineFile)] -> NineFile
-boringDir name contents = Directory
-	(return $ M.fromList contents)
-        (return ())
-        (return $ boringStat {st_name = "."})
-        (const $ return ())
-	(return 0)
+boringDir name contents = let m = M.fromList contents in Directory {
+	getFiles = (return $ map snd $ contents),
+	descend = (\x -> case M.lookup x m of
+		Nothing -> throwError $ ENoFile x
+		Just f -> return f),
+        remove = (return ()),
+        stat = (return $ boringStat {st_name = "."}),
+        wstat = (const $ return ()),
+	version = (return 0)}
 
 run9PServer :: Config -> IO ()
 run9PServer cfg = do
@@ -139,39 +147,48 @@ handleMsg say p = do
 					TTwalk -> rwalk p
 					TTstat -> rstat p
 					TTclunk -> rclunk p
+					TTauth -> rauth p
 	 			)
 			case r of
 				(Right response) -> liftIO $ say $ response
 				(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
 
-makeQid :: NineFile -> Qid
-makeQid = const $ Qid 0 0 0
+makeQid :: NineFile -> Nine Qid
+makeQid x = do
+	s <- getStat x
+	return $ Qid (fromIntegral $ shift (st_mode s) 24) 0 42
 
 --TODO version check
-rversion :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rversion :: Msg -> Nine Msg
 rversion (Msg _ t (Tversion s _)) = return $ Msg TRversion t (Rversion s "9P2000")
 
-rattach :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rattach :: Msg -> Nine Msg
 rattach (Msg _ t (Tattach fid _ _ _)) = do
 	root <- asks root
 	S.modify (M.insert fid root)
-	return $ Msg TRattach t $ Rattach $ makeQid root
+	q <- makeQid root
+	return $ Msg TRattach t $ Rattach q 
 
 --walk :: [String] -> NineFile -> NineFile
-walk :: [Qid] -> [String] -> NineFile -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) (NineFile, [Qid])
+walk :: [Qid] -> [String] -> NineFile -> Nine (NineFile, [Qid])
 walk qs [] f = return (f, qs)
 --walk (x:[]) (RegularFile _ _ _ _ _ _) = return f
-walk qs (x:xs) (RegularFile _ _ _ _ _ _) = throwError ENotADir
-walk qs (x:xs) (Directory gF _ _ _ _) = do
-	m <- lift $ lift gF
-	case M.lookup x m of
-		Nothing -> throwError $ ENoFile x
-		Just f -> do
-			walk ((makeQid f):qs) xs f
+walk qs (x:xs) (RegularFile {}) = throwError ENotADir
+walk qs (x:xs) (Directory {descend = desc}) = do
+	f <- (\x -> case x of
+			(Left e) -> throwError e
+			(Right v) -> return v
+		) =<< (lift $ lift $ runErrorT $ desc x)
+	--m <- lift $ lift gF
+	--case M.lookup x m of
+		--Nothing -> throwError $ ENoFile x
+		--Just f -> do
+	q <- makeQid f
+	walk (q:qs) xs f
 
 walk' = walk []
 
-rwalk :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rwalk :: Msg -> Nine Msg
 rwalk (Msg _ t (Twalk fid newfid path)) = do
 	m <- S.get
 	case M.lookup fid m of
@@ -180,22 +197,36 @@ rwalk (Msg _ t (Twalk fid newfid path)) = do
 			(nf, qs) <- walk' path f
 			S.modify (M.insert newfid nf)
 			return $ Msg TRwalk t $ Rwalk $ qs
+
+getStat :: NineFile -> Nine Stat
+getStat f = do
+	s <- lift $ lift $ stat f
+	return s { st_mode = (case f of
+			(RegularFile {}) -> flip clearBit 32
+			(Directory {}) -> flip setBit 32
+		) $ st_mode s }
 	
-rstat :: Msg -> ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) Msg
+rstat :: Msg -> Nine Msg
 rstat (Msg _ t (Tstat fid)) = do
 	m <- S.get
 	let f = M.lookup fid m
 	case f of
 		Nothing -> throwError $ ENoFid fid
 		Just (RegularFile _ _ _ _ _ _) -> do
-			s <- lift $ lift $ stat $ fromJust f
+			s <- getStat $ fromJust f
 			return $ Msg TRstat t $ Rstat $ [s]
-		Just (Directory gF _ _ _ _) -> do
-			contents <- lift $ lift gF
-			s <- lift $ lift $ mapM stat $ map snd $ M.toList contents
-			mys <- lift $ lift $ stat $ fromJust f
+		Just (Directory { getFiles = gF }) -> do
+			contents <- lift $ lift $ gF
+			s <- mapM getStat $ contents
+			mys <- getStat $ fromJust f
+			-- todo ..
 			return $ Msg TRstat t $ Rstat $ mys:s
 
+rclunk :: Msg -> Nine Msg
 rclunk (Msg _ t (Tclunk fid)) = do
 	S.modify (M.delete fid)
 	return $ Msg TRclunk t $ Rclunk
+
+rauth :: Msg -> Nine Msg
+rauth (Msg {}) = do
+	throwError ENoAuthRequired
