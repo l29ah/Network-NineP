@@ -52,5 +52,6 @@ boringDir name contents = let m = M.fromList contents in Directory {
         remove = (return ()),
         stat = (return $ boringStat {st_name = "."}),
         wstat = (const $ return ()),
-	version = (return 0)}
+	version = (return 0),
+	parent = return Nothing }
 
