@@ -6,7 +6,18 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  Build-Depends:     base >= 4, bytestring >= 0.9.2.1, containers >= 0.4.2.1, NineP >= 0.0.2, network >= 2.3.0.14, binary >= 0.5.1.0, mtl >= 2.1.2, monad-loops >= 0.3.3.0
+  Build-Depends:
+    base >= 4,
+    bytestring >= 0.9.2.1,
+    containers >= 0.4.2.1,
+    NineP >= 0.0.2,
+    network >= 2.3.0.14,
+    binary >= 0.5.1.0,
+    mtl >= 2.1.2,
+    monad-loops >= 0.3.3.0,
+    data-accessor >= 0.2.2.3,
+    data-accessor-template >= 0.2.1.10,
+    data-accessor-transformers >= 0.2.1.4
   Exposed-modules:   Network.NineP
  
 Executable test

@@ -20,6 +20,7 @@ module Network.NineP.Internal.Msg
 import Control.Monad.RWS (RWST(..), evalRWST)
 import Control.Monad.Reader.Class (asks)
 import qualified Control.Monad.State.Class as S
+import Data.Accessor.Monad.Trans.RWS hiding (lift)
 import Data.Binary.Put
 import Data.Bits
 import Data.NineP
@@ -63,7 +64,9 @@ makeQid x = do
 	return $ Qid (getQidTyp s) 0 42
 
 rversion :: Msg -> Nine [Msg]
-rversion (Msg _ t (Tversion s _)) = return $ return $ Msg TRversion t (Rversion s "9P2000")
+rversion (Msg _ t (Tversion s _)) = do
+	lift $ set msize s
+	return $ return $ Msg TRversion t (Rversion s "9P2000")
 
 rattach :: Msg -> Nine [Msg]
 rattach (Msg _ t (Tattach fid _ _ _)) = do

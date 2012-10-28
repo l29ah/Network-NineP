@@ -1,13 +1,19 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Network.NineP.Internal.State
 	( Nine
 	, Config(..)
+	, emptyState
+	, msize
 	, lookup
 	, insert
 	, delete
 	) where
 
 import Control.Monad.RWS (RWST(..), evalRWST)
-import qualified Control.Monad.State.Class as S
+import Data.Accessor
+import Data.Accessor.Monad.Trans.RWS hiding (lift)
+import Data.Accessor.Template
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Word
@@ -20,20 +26,29 @@ data Config = Config {
 		root :: NineFile
 	}
 
-type Nine x = ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) x 
+data NineState = NineState {
+		fidMap_ :: Map Word32 NineFile,
+		msize_ :: Word32
+	}
+
+emptyState = NineState (M.empty :: Map Word32 NineFile) 0
+
+$( deriveAccessors ''NineState )
+
+type Nine x = ErrorT NineError (RWST Config () NineState IO) x 
 
 lookup :: Word32 -> Nine NineFile
 lookup fid = do
-	m <- S.get
+	m <- lift $ get fidMap
 	case M.lookup fid m of
 		Nothing -> throwError $ ENoFid fid
 		Just f -> return f
 
 insert :: Word32 -> NineFile -> Nine ()
 insert fid f = do
-	m <- S.get
-	S.modify (M.insert fid f)
+	m <- lift $ get fidMap
+	lift $ modify fidMap $ M.insert fid f
 
 delete :: Word32 -> Nine ()
 delete fid = do
-	S.modify $ M.delete fid
+	lift $ modify fidMap $ M.delete fid

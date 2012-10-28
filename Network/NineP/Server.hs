@@ -36,6 +36,7 @@ import System.IO
 import Network.NineP.Error
 import Network.NineP.Internal.File
 import Network.NineP.Internal.Msg
+import Network.NineP.Internal.State
 
 import Debug.Trace
 
@@ -88,7 +89,7 @@ receiver cfg h say = evalRWST (iterateUntil id (do
 					handleMsg say p
 					return False
 		) >> return ()
-	) cfg (M.empty :: Map Word32 NineFile) >> return ()
+	) cfg emptyState >> return ()
 
 handleMsg say p = do
 	let Msg typ t m = p
