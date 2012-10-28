@@ -92,23 +92,21 @@ receiver cfg h say = evalRWST (iterateUntil id (do
 
 handleMsg say p = do
 	let Msg typ t m = p
-	case typ of 
-		TTflush -> return ()	-- not implemented
-		_ -> do
-			r <- runErrorT (case typ of
-					TTversion -> rversion p
-					TTattach -> rattach p
-					TTwalk -> rwalk p
-					TTstat -> rstat p
-					TTwstat -> rwstat p
-					TTclunk -> rclunk p
-					TTauth -> rauth p
-					TTopen -> ropen p
-					TTread -> rread p
-					TTwrite -> rwrite p
-					TTremove -> rremove p
-					TTcreate -> rcreate p
-	 			)
-			case r of
-				(Right response) -> liftIO $ mapM_ say $ response
-				(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
+	r <- runErrorT (case typ of
+			TTversion -> rversion p
+			TTattach -> rattach p
+			TTwalk -> rwalk p
+			TTstat -> rstat p
+			TTwstat -> rwstat p
+			TTclunk -> rclunk p
+			TTauth -> rauth p
+			TTopen -> ropen p
+			TTread -> rread p
+			TTwrite -> rwrite p
+			TTremove -> rremove p
+			TTcreate -> rcreate p
+			TTflush -> rflush p
+		)
+	case r of
+		(Right response) -> liftIO $ mapM_ say $ response
+		(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail

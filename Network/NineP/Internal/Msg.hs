@@ -12,6 +12,7 @@ module Network.NineP.Internal.Msg
 	, rwrite
 	, rremove
 	, rcreate
+	, rflush
 	) where
 
 import Control.Monad.RWS (RWST(..), evalRWST)
@@ -137,3 +138,6 @@ rremove (Msg _ t (Tremove fid)) = undefined
 
 rcreate :: Msg -> Nine [Msg]
 rcreate (Msg _ t (Tcreate fid name perm mode)) = undefined
+
+rflush :: Msg -> Nine [Msg]
+rflush _ = return []
