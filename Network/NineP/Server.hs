@@ -1,12 +1,10 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -pgmP cpp #-}
 
-module HighNineP 
-	( NineFile(..)
+module Network.NineP.Server
+	( module Network.NineP.Internal.File
 	, Config(..)
 	, run9PServer
-	, boringFile
-	, boringDir
 	) where
 
 import Control.Concurrent
@@ -23,6 +21,7 @@ import qualified Control.Monad.Writer.Class as W
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
+import qualified Data.ByteString as BS
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Map (Map)
@@ -34,56 +33,16 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 --import Network.Socket.ByteString
 import System.IO
 
-import Error
+import Network.NineP.Error
+import Network.NineP.Internal.File
 
 import Debug.Trace
-
-data NineFile =
-	RegularFile {
-        	read :: Word64 -> Word32 -> IO (B.ByteString),
-        	write :: Word64 -> B.ByteString -> IO (Word32),
-		remove :: IO (),
-		stat :: IO Stat,
-		wstat :: Stat -> IO (),
-		version :: IO Word32
-	} | Directory {
-		getFiles :: IO [NineFile],	-- must include ..
-		parent :: IO (Maybe NineFile),
-		descend :: String -> ErrorT NineError IO NineFile,
-		remove :: IO (),
-		stat :: IO Stat,	-- The directory stat must return only stat for .
-		wstat :: Stat -> IO (),
-		version :: IO Word32
-	}
 
 data Config = Config {
 		root :: NineFile
 	}
 
 type Nine x = ErrorT NineError (RWST Config () (Map Word32 NineFile) IO) x
-
-boringStat :: Stat
-boringStat = Stat 0 0 (Qid 0 0 0) 0o0777 0 0 0 "boring" "root" "root" "root"
-
-boringFile :: String -> NineFile
-boringFile name = RegularFile
-        (\_ c -> return $ B.take (fromIntegral c) "i am so very boring")
-        (\_ _ -> return 0)
-        (return ())
-        (return $ boringStat {st_name = name})
-        (const $ return ())
-	(return 0)
-
-boringDir :: String -> [(String, NineFile)] -> NineFile
-boringDir name contents = let m = M.fromList contents in Directory {
-	getFiles = (return $ map snd $ contents),
-	descend = (\x -> case M.lookup x m of
-		Nothing -> throwError $ ENoFile x
-		Just f -> return f),
-        remove = (return ()),
-        stat = (return $ boringStat {st_name = "."}),
-        wstat = (const $ return ()),
-	version = (return 0)}
 
 run9PServer :: Config -> IO ()
 run9PServer cfg = do
@@ -102,7 +61,7 @@ doClient cfg h = do
 	putStrLn "yay, a client"
 	hSetBuffering h NoBuffering
 	chan <- (newChan :: IO (Chan Msg))
-	st <- forkIO $ sender (readChan chan) (B.hPut h)
+	st <- forkIO $ sender (readChan chan) (BS.hPut h . BS.concat . B.toChunks) -- make a strict bytestring
 	receiver cfg h (writeChan chan)
 	putStrLn "bye!"
 	killThread st
@@ -148,47 +107,50 @@ handleMsg say p = do
 					TTstat -> rstat p
 					TTclunk -> rclunk p
 					TTauth -> rauth p
+					TTopen -> ropen p
+					TTread -> rread p
 	 			)
 			case r of
-				(Right response) -> liftIO $ say $ response
+				(Right response) -> liftIO $ mapM_ say $ response
 				(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
+
+getQidTyp :: Stat -> Word8
+getQidTyp s = fromIntegral $ shift (st_mode s) 24
 
 makeQid :: NineFile -> Nine Qid
 makeQid x = do
 	s <- getStat x
-	return $ Qid (fromIntegral $ shift (st_mode s) 24) 0 42
+	return $ Qid (getQidTyp s) 0 42
 
 --TODO version check
-rversion :: Msg -> Nine Msg
-rversion (Msg _ t (Tversion s _)) = return $ Msg TRversion t (Rversion s "9P2000")
+rversion :: Msg -> Nine [Msg]
+rversion (Msg _ t (Tversion s _)) = return $ return $ Msg TRversion t (Rversion s "9P2000")
 
-rattach :: Msg -> Nine Msg
+rattach :: Msg -> Nine [Msg]
 rattach (Msg _ t (Tattach fid _ _ _)) = do
 	root <- asks root
 	S.modify (M.insert fid root)
 	q <- makeQid root
-	return $ Msg TRattach t $ Rattach q 
+	return $ return $ Msg TRattach t $ Rattach q 
 
---walk :: [String] -> NineFile -> NineFile
 walk :: [Qid] -> [String] -> NineFile -> Nine (NineFile, [Qid])
 walk qs [] f = return (f, qs)
---walk (x:[]) (RegularFile _ _ _ _ _ _) = return f
 walk qs (x:xs) (RegularFile {}) = throwError ENotADir
 walk qs (x:xs) (Directory {descend = desc}) = do
-	f <- (\x -> case x of
-			(Left e) -> throwError e
-			(Right v) -> return v
-		) =<< (lift $ lift $ runErrorT $ desc x)
-	--m <- lift $ lift gF
-	--case M.lookup x m of
-		--Nothing -> throwError $ ENoFile x
-		--Just f -> do
+	f <- mapErrorT lift $ desc x
 	q <- makeQid f
 	walk (q:qs) xs f
 
 walk' = walk []
 
-rwalk :: Msg -> Nine Msg
+fidLookup :: Word32 -> Nine NineFile
+fidLookup fid = do
+	m <- S.get
+	case M.lookup fid m of
+		Nothing -> throwError $ ENoFid fid
+		Just f -> return f
+
+rwalk :: Msg -> Nine [Msg]
 rwalk (Msg _ t (Twalk fid newfid path)) = do
 	m <- S.get
 	case M.lookup fid m of
@@ -196,17 +158,19 @@ rwalk (Msg _ t (Twalk fid newfid path)) = do
 		Just f -> do
 			(nf, qs) <- walk' path f
 			S.modify (M.insert newfid nf)
-			return $ Msg TRwalk t $ Rwalk $ qs
+			return $ return $ Msg TRwalk t $ Rwalk $ qs
 
 getStat :: NineFile -> Nine Stat
 getStat f = do
+	let fixDirBit = (case f of
+				(RegularFile {}) -> flip clearBit 31
+				(Directory {}) -> flip setBit 31
+			)
 	s <- lift $ lift $ stat f
-	return s { st_mode = (case f of
-			(RegularFile {}) -> flip clearBit 32
-			(Directory {}) -> flip setBit 32
-		) $ st_mode s }
+	return s { st_mode = fixDirBit $ st_mode s,
+		st_qid = (st_qid s) { qid_typ = getQidTyp s } }
 	
-rstat :: Msg -> Nine Msg
+rstat :: Msg -> Nine [Msg]
 rstat (Msg _ t (Tstat fid)) = do
 	m <- S.get
 	let f = M.lookup fid m
@@ -214,19 +178,32 @@ rstat (Msg _ t (Tstat fid)) = do
 		Nothing -> throwError $ ENoFid fid
 		Just (RegularFile _ _ _ _ _ _) -> do
 			s <- getStat $ fromJust f
-			return $ Msg TRstat t $ Rstat $ [s]
+			return $ return $ Msg TRstat t $ Rstat $ [s]
 		Just (Directory { getFiles = gF }) -> do
 			contents <- lift $ lift $ gF
 			s <- mapM getStat $ contents
 			mys <- getStat $ fromJust f
-			-- todo ..
-			return $ Msg TRstat t $ Rstat $ mys:s
+			-- TODO ..
+			--return $ map (Msg TRstat t . Rstat . return) $ mys:s
+			--return $ return $ Msg TRstat t $ Rstat $ return $ mys
+			return $ return $ Msg TRstat t $ Rstat $ mys:s
 
-rclunk :: Msg -> Nine Msg
+rclunk :: Msg -> Nine [Msg]
 rclunk (Msg _ t (Tclunk fid)) = do
 	S.modify (M.delete fid)
-	return $ Msg TRclunk t $ Rclunk
+	return $ return $ Msg TRclunk t $ Rclunk
 
-rauth :: Msg -> Nine Msg
+rauth :: Msg -> Nine [Msg]
 rauth (Msg {}) = do
 	throwError ENoAuthRequired
+
+ropen :: Msg -> Nine [Msg]
+ropen (Msg _ t (Topen fid mode)) = do
+	-- TODO check perms
+	f <- fidLookup fid
+	q <- makeQid $ f
+	-- TODO iounit
+	return $ return $ Msg TRopen t $ Ropen q 0
+
+rread :: Msg -> Nine [Msg]
+rread (Msg _ t (Tread fid offset count)) = undefined

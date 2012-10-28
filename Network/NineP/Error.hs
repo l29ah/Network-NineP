@@ -1,4 +1,4 @@
-module Error
+module Network.NineP.Error
 	( NineError(..)
 	, module Control.Monad.Error
 	) where
