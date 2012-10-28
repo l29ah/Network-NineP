@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Network.NineP.Internal.Msg
 	( Config(..)
 	, rversion
@@ -132,15 +134,18 @@ rread (Msg _ t (Tread fid offset count)) = do
 	case f of
 		RegularFile {} -> undefined
 		Directory {} -> do
-			when (offset > 0) $ throwError $ ENotImplemented "directory read at offset"
-			contents <- lift $ lift $ getFiles f
-			s <- mapM getStat $ contents
-			mys <- getStat f
-			let d = runPut $ mapM_ put $ mys:s
-			-- TODO ..
-			-- TODO split
-			return $ return $ Msg TRread t $ Rread d
-
+			--when (offset > 0) $ throwError $ ENotImplemented "directory read at offset"
+			if (offset > 0)
+				then return $ return $ Msg TRread t $ Rread ""
+				else do
+					contents <- lift $ lift $ getFiles f
+					s <- mapM getStat $ contents
+					mys <- getStat f
+					let d = runPut $ mapM_ put $ mys:s
+					-- TODO ..
+					-- TODO split
+					return $ return $ Msg TRread t $ Rread d
+		
 rwrite :: Msg -> Nine [Msg]
 rwrite (Msg _ t (Twrite fid offset d)) = do
 	f <- lookup fid
