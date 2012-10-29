@@ -160,7 +160,9 @@ rwrite (Msg _ t (Twrite fid offset d)) = do
 	checkPerms f 1
 	case f of
 		Directory {} -> throwError EDir
-		RegularFile {} -> throwError $ ENotImplemented "write"
+		RegularFile {} -> do
+			c <- mapErrorT lift $ (write f) offset d
+			return $ return $ Msg TRwrite t $ Rwrite c
 
 rwstat :: Msg -> Nine [Msg]
 rwstat (Msg _ t (Twstat fid stat)) = do
