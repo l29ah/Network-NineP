@@ -23,12 +23,13 @@ import qualified Control.Monad.State.Class as S
 import Data.Accessor.Monad.Trans.RWS hiding (lift)
 import Data.Binary.Put
 import Data.Bits
+import qualified Data.ByteString.Lazy as B
 import Data.List (isPrefixOf)
 import Data.NineP
 import Data.Map (Map)
 import Data.Maybe
 import Data.Word
-import Prelude hiding (lookup)
+import Prelude hiding (lookup, read)
 
 import Network.NineP.Error
 import Network.NineP.Internal.File
@@ -139,9 +140,14 @@ ropen (Msg _ t (Topen fid mode)) = do
 rread :: Msg -> Nine [Msg]
 rread (Msg _ t (Tread fid offset count)) = do
 	f <- lookup fid
+	u <- iounit
 	checkPerms f 0
+	let splitMsg d s = if B.null d then [] else
+		let (a, b) = B.splitAt s d in a : splitMsg b s
 	case f of
-		RegularFile {} -> undefined
+		RegularFile {} -> do
+			d <- mapErrorT lift $ (read f) offset count
+			mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		Directory {} -> do
 			--when (offset > 0) $ throwError $ ENotImplemented "directory read at offset"
 			if (offset > 0)
@@ -150,8 +156,7 @@ rread (Msg _ t (Tread fid offset count)) = do
 					contents <- lift $ lift $ getFiles f
 					s <- mapM getStat $ contents
 					let d = runPut $ mapM_ put s
-					-- TODO split
-					return $ return $ Msg TRread t $ Rread d
+					mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		
 rwrite :: Msg -> Nine [Msg]
 rwrite (Msg _ t (Twrite fid offset d)) = do
