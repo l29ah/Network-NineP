@@ -142,21 +142,17 @@ rread (Msg _ t (Tread fid offset count)) = do
 	f <- lookup fid
 	u <- iounit
 	checkPerms f 0
-	let splitMsg d s = if B.null d then [] else
+	let splitMsg d s = if B.null d then [B.empty] else
 		let (a, b) = B.splitAt s d in a : splitMsg b s
 	case f of
 		RegularFile {} -> do
 			d <- mapErrorT lift $ (read f) offset count
 			mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		Directory {} -> do
-			--when (offset > 0) $ throwError $ ENotImplemented "directory read at offset"
-			if (offset > 0)
-				then return $ return $ Msg TRread t $ Rread ""
-				else do
-					contents <- lift $ lift $ getFiles f
-					s <- mapM getStat $ contents
-					let d = runPut $ mapM_ put s
-					mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
+			contents <- lift $ lift $ getFiles f
+			s <- mapM getStat $ contents
+			let d = runPut $ mapM_ put s
+			mapM (return . Msg TRread t . Rread) $ splitMsg (B.drop (fromIntegral offset) d) $ fromIntegral u
 		
 rwrite :: Msg -> Nine [Msg]
 rwrite (Msg _ t (Twrite fid offset d)) = do
