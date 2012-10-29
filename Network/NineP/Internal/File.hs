@@ -15,8 +15,8 @@ import Network.NineP.Error
 
 data NineFile =
 	RegularFile {
-        	read :: Word64 -> Word32 -> IO (B.ByteString),
-        	write :: Word64 -> B.ByteString -> IO (Word32),
+        	read :: Word64 -> Word32 -> ErrorT NineError IO (B.ByteString),
+        	write :: Word64 -> B.ByteString -> ErrorT NineError IO (Word32),
 		remove :: IO (),
 		stat :: IO Stat,
 		wstat :: Stat -> IO (),
