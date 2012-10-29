@@ -149,9 +149,7 @@ rread (Msg _ t (Tread fid offset count)) = do
 				else do
 					contents <- lift $ lift $ getFiles f
 					s <- mapM getStat $ contents
-					mys <- getStat f
-					let d = runPut $ mapM_ put $ mys:s
-					-- TODO ..
+					let d = runPut $ mapM_ put s
 					-- TODO split
 					return $ return $ Msg TRread t $ Rread d
 		
