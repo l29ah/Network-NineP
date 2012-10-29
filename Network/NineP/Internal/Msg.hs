@@ -124,13 +124,17 @@ rauth :: Msg -> Nine [Msg]
 rauth (Msg {}) = do
 	throwError ENoAuthRequired
 
+open :: NineFile -> Nine Qid
+open f = do
+	makeQid $ f
+
 ropen :: Msg -> Nine [Msg]
 ropen (Msg _ t (Topen fid mode)) = do
 	f <- lookup fid
 	checkPerms f mode
-	q <- makeQid $ f
-	-- TODO iounit
-	return $ return $ Msg TRopen t $ Ropen q 0
+	q <- open f
+	iou <- iounit
+	return $ return $ Msg TRopen t $ Ropen q iou
 
 rread :: Msg -> Nine [Msg]
 rread (Msg _ t (Tread fid offset count)) = do
@@ -163,16 +167,26 @@ rwstat :: Msg -> Nine [Msg]
 rwstat (Msg _ t (Twstat fid stat)) = do
 	-- TODO check perms
 	f <- lookup fid
-	undefined
+	throwError $ ENotImplemented "wstat"
 
 rremove :: Msg -> Nine [Msg]
 rremove (Msg _ t (Tremove fid)) = do
 	-- TODO check perms
 	f <- lookup fid
-	undefined
+	throwError $ ENotImplemented "remove"
 
 rcreate :: Msg -> Nine [Msg]
-rcreate (Msg _ t (Tcreate fid name perm mode)) = undefined
+rcreate (Msg _ t (Tcreate fid name perm mode)) = do
+	-- TODO check perms
+	--dir <- lookup fid
+	if testBit mode 31
+		then do 
+			throwError $ ENotImplemented "create directory"
+		else do
+			throwError $ ENotImplemented "create file"
+	--q <- open f
+	-- TODO iounit
+	--return $ return $ Msg TRcreate t $ Rcreate
 
 rflush :: Msg -> Nine [Msg]
 rflush _ = return []

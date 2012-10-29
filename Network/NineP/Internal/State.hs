@@ -8,6 +8,7 @@ module Network.NineP.Internal.State
 	, lookup
 	, insert
 	, delete
+	, iounit
 	) where
 
 import Control.Monad.RWS (RWST(..), evalRWST)
@@ -52,3 +53,9 @@ insert fid f = do
 delete :: Word32 -> Nine ()
 delete fid = do
 	lift $ modify fidMap $ M.delete fid
+
+iounit :: Nine Word32
+iounit = do
+	ms <- lift $ get msize
+	-- 23 is the biggest size of a message (write), but libixp uses 24, so we do too to stay safe
+	return $ ms - 24
