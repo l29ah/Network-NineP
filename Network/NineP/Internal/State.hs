@@ -2,9 +2,12 @@
 
 module Network.NineP.Internal.State
 	( Nine
+	, NineVersion(..)
+	, readVersion
 	, Config(..)
 	, emptyState
 	, msize
+	, protoVersion
 	, lookup
 	, insert
 	, delete
@@ -15,6 +18,7 @@ import Control.Monad.RWS (RWST(..), evalRWST)
 import Data.Accessor
 import Data.Accessor.Monad.Trans.RWS hiding (lift)
 import Data.Accessor.Template
+import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Word
@@ -23,16 +27,29 @@ import Prelude hiding (lookup)
 import Network.NineP.Error
 import Network.NineP.Internal.File
 
+data NineVersion = VerUnknown | Ver9P2000
+
+instance Show NineVersion where
+	show VerUnknown = "unknown"
+	show Ver9P2000 = "9P2000"
+
+readVersion :: String -> NineVersion
+readVersion s = if isPrefixOf "9P2000" s then Ver9P2000 else VerUnknown
+
 data Config = Config {
 		root :: NineFile
 	}
 
 data NineState = NineState {
 		fidMap_ :: Map Word32 NineFile,
-		msize_ :: Word32
+		msize_ :: Word32,
+		protoVersion_ :: NineVersion
 	}
 
-emptyState = NineState (M.empty :: Map Word32 NineFile) 0
+emptyState = NineState
+	(M.empty :: Map Word32 NineFile)
+	0
+	VerUnknown
 
 $( deriveAccessors ''NineState )
 

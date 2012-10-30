@@ -24,7 +24,6 @@ import Data.Accessor.Monad.Trans.RWS hiding (lift)
 import Data.Binary.Put
 import Data.Bits
 import qualified Data.ByteString.Lazy as B
-import Data.List (isPrefixOf)
 import Data.NineP
 import Data.Map (Map)
 import Data.Maybe
@@ -68,8 +67,9 @@ makeQid x = do
 rversion :: Msg -> Nine [Msg]
 rversion (Msg _ t (Tversion s v)) = do
 	lift $ set msize s
-	return $ return $ Msg TRversion t $ Rversion s $
-			if isPrefixOf "9P2000" v then "9P2000" else "unknown"
+	let ver = readVersion v
+	lift $ set protoVersion ver 
+	return $ return $ Msg TRversion t $ Rversion s $ show ver
 
 rattach :: Msg -> Nine [Msg]
 rattach (Msg _ t (Tattach fid _ _ _)) = do
