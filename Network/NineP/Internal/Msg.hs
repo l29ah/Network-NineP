@@ -78,11 +78,19 @@ rattach (Msg _ t (Tattach fid _ _ _)) = do
 	q <- makeQid root
 	return $ return $ Msg TRattach t $ Rattach q 
 
+desc :: NineFile -> String -> ErrorT NineError IO NineFile
+desc f ".." = do
+	mp <- lift $ parent f
+	return $ case mp of
+		Just p -> p
+		Nothing -> f
+desc f s = descend f s
+
 walk :: [Qid] -> [String] -> NineFile -> Nine (NineFile, [Qid])
 walk qs [] f = return (f, qs)
 walk qs (x:xs) (RegularFile {}) = throwError ENotADir
-walk qs (x:xs) (Directory {descend = desc}) = do
-	f <- mapErrorT lift $ desc x
+walk qs (x:xs) d@(Directory {}) = do
+	f <- mapErrorT lift $ desc d x
 	q <- makeQid f
 	walk (q:qs) xs f
 
