@@ -1,3 +1,8 @@
+-- |
+-- Stability   :  Ultra-Violence
+-- Portability :  I'm too young to die
+-- Higher-level file patterns.
+
 module Network.NineP.File
 	( chanFile
 	) where
@@ -25,6 +30,7 @@ writeCF c offset d = case offset of
 		lift $ writeChan c d
 		return $ fromIntegral $ B.length d
 
+-- |A file that reads from and writes to the specified Chans
 chanFile :: String -> Chan ByteString -> Chan ByteString -> NineFile
 chanFile name rc wc = (boringFile name) {
 	read = readCF rc,

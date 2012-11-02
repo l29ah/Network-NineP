@@ -1,3 +1,7 @@
+-- |
+-- Stability   :  Ultra-Violence
+-- Portability :  I'm too young to die
+-- Listening on sockets for the incoming requests.
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -pgmP cpp #-}
 
@@ -40,6 +44,7 @@ import Network.NineP.Internal.State
 
 import Debug.Trace
 
+-- |Run the actual server
 run9PServer :: Config -> IO ()
 run9PServer cfg = do
 	s <- socket AF_INET Stream defaultProtocol

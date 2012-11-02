@@ -15,18 +15,25 @@ import Network.NineP.Error
 
 data NineFile =
 	RegularFile {
-        	read :: Word64 -> Word32 -> ErrorT NineError IO (B.ByteString),
-        	write :: Word64 -> B.ByteString -> ErrorT NineError IO (Word32),
+        	read :: Word64	-- Offset
+			-> Word32 -- Length
+			-> ErrorT NineError IO (B.ByteString),	-- Resulting data
+        	write :: Word64	-- Offset
+			-> B.ByteString	-- The written data
+			-> ErrorT NineError IO (Word32),	-- Number of bytes written successfully. Should return @0@ in case of an error.
 		remove :: IO (),
 		stat :: IO Stat,
 		wstat :: Stat -> IO (),
 		version :: IO Word32
 	} | Directory {
-		getFiles :: IO [NineFile],	-- must include ..
+		-- |A callback to get the list of the files this directory contains. Must not contain @.@ and @..@ entries.
+		getFiles :: IO [NineFile],
 		parent :: IO (Maybe NineFile),
+		-- |A callback to address a specific file by its name. @.@ and @..@ are handled in the library.
 		descend :: String -> ErrorT NineError IO NineFile,
 		remove :: IO (),
-		stat :: IO Stat,	-- The directory stat must return only stat for .
+		-- |The directory stat must return only stat for @.@.
+		stat :: IO Stat,
 		wstat :: Stat -> IO (),
 		version :: IO Word32
 	}

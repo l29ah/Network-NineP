@@ -6,7 +6,7 @@ Category:            Network
 License-file:        LICENSE
 Build-Type:          Simple
 Cabal-Version:       >=1.2
-Stability:           Experimental
+Stability:           Ultra-Violence
 Tested-With:         GHC == 7.4.2
 
 Library

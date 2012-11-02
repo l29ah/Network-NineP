@@ -36,7 +36,9 @@ instance Show NineVersion where
 readVersion :: String -> NineVersion
 readVersion s = if isPrefixOf "9P2000" s then Ver9P2000 else VerUnknown
 
+-- |Server configuration.
 data Config = Config {
+		-- |The @/@ directory of the hosted filesystem
 		root :: NineFile
 	}
 

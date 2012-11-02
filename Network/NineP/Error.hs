@@ -1,3 +1,7 @@
+-- |
+-- Stability   :  Ultra-Violence
+-- Portability :  I'm too young to die
+
 module Network.NineP.Error
 	( NineError(..)
 	, module Control.Monad.Error
@@ -6,6 +10,7 @@ module Network.NineP.Error
 import Control.Monad.Error
 import Data.Word
 
+-- |Throwable errors
 data NineError = 
 	ENotImplemented String |
 	ENotADir |
