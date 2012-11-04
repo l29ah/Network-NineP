@@ -150,8 +150,9 @@ rread (Msg _ t (Tread fid offset count)) = do
 	f <- lookup fid
 	u <- iounit
 	checkPerms f 0
-	let splitMsg d s = if B.null d then [B.empty] else
-		let (a, b) = B.splitAt s d in a : splitMsg b s
+	let	splitMsg d s = let r = splitMsg' d s in if null r then [B.empty] else r
+		splitMsg' d s = if B.null d then [] else
+			let (a, b) = B.splitAt s d in a : splitMsg' b s
 	case f of
 		RegularFile {} -> do
 			d <- mapErrorT lift $ (read f) offset count

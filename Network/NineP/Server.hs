@@ -33,24 +33,48 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.NineP
 import Data.Word
+import Network hiding (accept)
+import Network.BSD
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 --import Network.Socket.ByteString
 import System.IO
+import Text.Regex.Posix ((=~))
+
+import Debug.Trace
 
 import Network.NineP.Error
 import Network.NineP.Internal.File
 import Network.NineP.Internal.Msg
 import Network.NineP.Internal.State
 
-import Debug.Trace
+maybeRead :: Read a => String -> Maybe a
+maybeRead = fmap fst . listToMaybe . reads
+
+connection :: String -> IO Socket
+connection s = let	pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
+			wrongAddr = ioError $ userError $ "wrong 9p connection address: " ++ s
+			(bef, _, aft, grps) = s =~ pat :: (String, String, String, [String])
+	in if (bef /= "" || aft /= "" || grps == [])
+		then wrongAddr
+		else case grps of
+			[addr, port, ""] -> listen' addr $ PortNum $ fromMaybe 2358 $ maybeRead port
+			["", "", addr]  -> listenOn $ UnixSocket addr
+			_ -> wrongAddr
+
+listen' :: HostName -> PortNumber -> IO Socket
+listen' hostname port = do
+	proto <- getProtocolNumber "tcp"
+	bracketOnError (socket AF_INET Stream proto) sClose (\sock -> do
+		setSocketOption sock ReuseAddr 1
+		he <- getHostByName hostname
+		bindSocket sock (SockAddrInet port (hostAddress he))
+		listen sock maxListenQueue
+		return sock)
 
 -- |Run the actual server
 run9PServer :: Config -> IO ()
 run9PServer cfg = do
-	s <- socket AF_INET Stream defaultProtocol
-	setSocketOption s ReuseAddr 1
-	bindSocket s (SockAddrInet 4242 iNADDR_ANY)
-	listen s 10
+	s <- connection $ addr cfg
 	serve s cfg
 
 serve :: Socket -> Config -> IO ()
@@ -59,12 +83,10 @@ serve s cfg = forever $ accept s >>= (
 
 doClient :: Config -> Handle -> IO ()
 doClient cfg h = do
-	putStrLn "yay, a client"
 	hSetBuffering h NoBuffering
 	chan <- (newChan :: IO (Chan Msg))
 	st <- forkIO $ sender (readChan chan) (BS.hPut h . BS.concat . B.toChunks) -- make a strict bytestring
 	receiver cfg h (writeChan chan)
-	putStrLn "bye!"
 	killThread st
 	hClose h
 

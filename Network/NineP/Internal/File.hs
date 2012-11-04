@@ -50,14 +50,14 @@ boringFile name = RegularFile
         (const $ return ())
 	(return 0)
 
-boringDir :: [(String, NineFile)] -> NineFile
-boringDir contents = let m = M.fromList contents in Directory {
+boringDir :: String -> [(String, NineFile)] -> NineFile
+boringDir name contents = let m = M.fromList contents in Directory {
 	getFiles = (return $ map snd $ contents),
 	descend = (\x -> case M.lookup x m of
 		Nothing -> throwError $ ENoFile x
 		Just f -> return f),
         remove = (return ()),
-        stat = (return $ boringStat {st_name = "."}),
+        stat = (return $ boringStat {st_name = name}),
         wstat = (const $ return ()),
 	version = (return 0),
 	parent = return Nothing }

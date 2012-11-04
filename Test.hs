@@ -13,6 +13,9 @@ spamwr _ d = do
 	lift $ B.putStr d
 	return $ fromIntegral $ B.length d
 
-cfg = Config $ boringDir [("lol", (boringFile "lol") { write = spamwr })]
+cfg = Config {
+	root = boringDir "/" [("lol", (boringFile "lol") { write = spamwr })],
+	addr = "tcp!localhost!4242"
+}
 
 main = run9PServer cfg

@@ -39,7 +39,9 @@ readVersion s = if isPrefixOf "9P2000" s then Ver9P2000 else VerUnknown
 -- |Server configuration.
 data Config = Config {
 		-- |The @/@ directory of the hosted filesystem
-		root :: NineFile
+		root :: NineFile,
+		-- |The listening address. The syntax is taken from @Plan 9@ operating system and has the form @unix!/path/to/socket@ for unix socket files, and @tcp!hostname!port@ for tcp sockets.
+		addr :: String
 	}
 
 data NineState = NineState {

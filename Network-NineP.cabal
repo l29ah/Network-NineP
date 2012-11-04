@@ -23,7 +23,8 @@ Library
     monad-loops >= 0.3.3.0,
     data-accessor >= 0.2.2.3,
     data-accessor-template >= 0.2.1.10,
-    data-accessor-transformers >= 0.2.1.4
+    data-accessor-transformers >= 0.2.1.4,
+    regex-posix >= 0.95.2
   Exposed-modules:
     Network.NineP
     Network.NineP.Error
