@@ -50,8 +50,8 @@ boringFile name = RegularFile
         (const $ return ())
 	(return 0)
 
-boringDir :: String -> [(String, NineFile)] -> NineFile
-boringDir name contents = let m = M.fromList contents in Directory {
+boringDir :: [(String, NineFile)] -> NineFile
+boringDir contents = let m = M.fromList contents in Directory {
 	getFiles = (return $ map snd $ contents),
 	descend = (\x -> case M.lookup x m of
 		Nothing -> throwError $ ENoFile x

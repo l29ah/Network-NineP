@@ -13,6 +13,6 @@ spamwr _ d = do
 	lift $ B.putStr d
 	return $ fromIntegral $ B.length d
 
-cfg = Config $ boringDir "/" [("lol", (boringFile "lol") { write = spamwr })]
+cfg = Config $ boringDir [("lol", (boringFile "lol") { write = spamwr })]
 
 main = run9PServer cfg
