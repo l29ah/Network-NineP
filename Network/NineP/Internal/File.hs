@@ -43,7 +43,7 @@ boringStat = Stat 0 0 (Qid 0 0 0) 0o0777 0 0 0 "boring" "root" "root" "root"
 
 boringFile :: String -> NineFile
 boringFile name = RegularFile
-        (\_ c -> return $ B.take (fromIntegral c) "i am so very boring")
+        (\_ _ -> return "")
         (\_ _ -> return 0)
         (return ())
         (return $ boringStat {st_name = name})
