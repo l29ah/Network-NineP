@@ -51,7 +51,7 @@ connection s = let	pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
 	in if (bef /= "" || aft /= "" || grps == [])
 		then wrongAddr
 		else case grps of
-			[addr, port, ""] -> listen' addr $ PortNum $ fromMaybe 2358 $ maybeRead port
+			[addr, port, ""] -> listen' addr $ toEnum $ (fromMaybe 2358 $ maybeRead port :: Int)
 			["", "", addr]  -> listenOn $ UnixSocket addr
 			_ -> wrongAddr
 
