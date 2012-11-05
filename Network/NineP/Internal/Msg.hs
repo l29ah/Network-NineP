@@ -17,10 +17,8 @@ module Network.NineP.Internal.Msg
 	, rflush
 	) where
 
-import Control.Monad.RWS (RWST(..), evalRWST)
-import Control.Monad.Reader.Class (asks)
-import qualified Control.Monad.State.Class as S
-import Data.Accessor.Monad.Trans.RWS hiding (lift)
+import Control.Concurrent.MState hiding (put)
+import Control.Monad.Reader
 import Data.Binary.Put
 import Data.Bits
 import qualified Data.ByteString.Lazy as B
@@ -66,9 +64,8 @@ makeQid x = do
 
 rversion :: Msg -> Nine [Msg]
 rversion (Msg _ t (Tversion s v)) = do
-	lift $ set msize s
 	let ver = readVersion v
-	lift $ set protoVersion ver 
+	lift $ modifyM_ (\st -> st { msize = s, protoVersion = ver })
 	return $ return $ Msg TRversion t $ Rversion s $ show ver
 
 rattach :: Msg -> Nine [Msg]
@@ -90,7 +87,7 @@ walk :: [Qid] -> [String] -> NineFile -> Nine (NineFile, [Qid])
 walk qs [] f = return (f, qs)
 walk qs (x:xs) (RegularFile {}) = throwError ENotADir
 walk qs (x:xs) d@(Directory {}) = do
-	f <- mapErrorT lift $ desc d x
+	f <- mapErrorT (lift . lift) $ desc d x
 	q <- makeQid f
 	walk (q:qs) xs f
 
@@ -109,7 +106,7 @@ getStat f = do
 				(RegularFile {}) -> flip clearBit 31
 				(Directory {}) -> flip setBit 31
 			)
-	s <- lift $ lift $ stat f
+	s <- lift $ lift $ lift $ stat f
 	return s { st_mode = fixDirBit $ st_mode s,
 		st_qid = (st_qid s) { qid_typ = getQidTyp s } }
 	
@@ -155,10 +152,10 @@ rread (Msg _ t (Tread fid offset count)) = do
 			let (a, b) = B.splitAt s d in a : splitMsg' b s
 	case f of
 		RegularFile {} -> do
-			d <- mapErrorT lift $ (read f) offset count
+			d <- mapErrorT (lift . lift) $ (read f) offset count
 			mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		Directory {} -> do
-			contents <- lift $ lift $ getFiles f
+			contents <- lift $ lift $ lift $ getFiles f
 			s <- mapM getStat $ contents
 			let d = runPut $ mapM_ put s
 			mapM (return . Msg TRread t . Rread) $ splitMsg (B.drop (fromIntegral offset) d) $ fromIntegral u
@@ -170,7 +167,7 @@ rwrite (Msg _ t (Twrite fid offset d)) = do
 	case f of
 		Directory {} -> throwError EDir
 		RegularFile {} -> do
-			c <- mapErrorT lift $ (write f) offset d
+			c <- mapErrorT (lift . lift) $ (write f) offset d
 			return $ return $ Msg TRwrite t $ Rwrite c
 
 rwstat :: Msg -> Nine [Msg]

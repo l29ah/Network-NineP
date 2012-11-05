@@ -15,7 +15,7 @@ spamwr _ d = do
 
 cfg = Config {
 	root = boringDir "/" [("lol", (boringFile "lol") { write = spamwr })],
-	addr = "tcp!localhost!4242"
+	addr = "unix!/tmp/h9pt"
 }
 
 main = run9PServer cfg

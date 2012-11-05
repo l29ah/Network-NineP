@@ -14,10 +14,9 @@ module Network.NineP.Internal.State
 	, iounit
 	) where
 
-import Control.Monad.RWS (RWST(..), evalRWST)
-import Data.Accessor
-import Data.Accessor.Monad.Trans.RWS hiding (lift)
-import Data.Accessor.Template
+import Control.Concurrent.MState
+import Control.Monad.Reader
+import Control.Monad.State.Class
 import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -45,9 +44,9 @@ data Config = Config {
 	}
 
 data NineState = NineState {
-		fidMap_ :: Map Word32 NineFile,
-		msize_ :: Word32,
-		protoVersion_ :: NineVersion
+		fidMap :: Map Word32 NineFile,
+		msize :: Word32,
+		protoVersion :: NineVersion
 	}
 
 emptyState = NineState
@@ -55,28 +54,26 @@ emptyState = NineState
 	0
 	VerUnknown
 
-$( deriveAccessors ''NineState )
-
-type Nine x = ErrorT NineError (RWST Config () NineState IO) x 
+type Nine x = ErrorT NineError (MState NineState (ReaderT Config IO)) x
 
 lookup :: Word32 -> Nine NineFile
 lookup fid = do
-	m <- lift $ get fidMap
+	m <- (return . fidMap) =<< get 
 	case M.lookup fid m of
 		Nothing -> throwError $ ENoFid fid
 		Just f -> return f
 
 insert :: Word32 -> NineFile -> Nine ()
 insert fid f = do
-	m <- lift $ get fidMap
-	lift $ modify fidMap $ M.insert fid f
+	m <- (return . fidMap) =<< get 
+	lift $ modifyM_ (\s -> s { fidMap = M.insert fid f $ fidMap s })
 
 delete :: Word32 -> Nine ()
 delete fid = do
-	lift $ modify fidMap $ M.delete fid
+	lift $ modifyM_ (\s -> s { fidMap = M.delete fid $ fidMap s })
 
 iounit :: Nine Word32
 iounit = do
-	ms <- lift $ get msize
+	ms <- (return . msize) =<< get
 	-- 23 is the biggest size of a message (write), but libixp uses 24, so we do too to stay safe
 	return $ ms - 24

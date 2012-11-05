@@ -3,7 +3,6 @@
 -- Portability :  I'm too young to die
 -- Listening on sockets for the incoming requests.
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -pgmP cpp #-}
 
 module Network.NineP.Server
 	( module Network.NineP.Internal.File
@@ -12,16 +11,12 @@ module Network.NineP.Server
 	) where
 
 import Control.Concurrent
---import Control.Concurrent.Chan
+import Control.Concurrent.MState hiding (get, put)
 import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
---import qualified Control.Monad.State.Strict as S
-import Control.Monad.RWS (RWST(..), evalRWST)
-import Control.Monad.Reader.Class (asks)
-import qualified Control.Monad.State.Class as S
+import Control.Monad.Reader
 import Control.Monad.Trans
-import qualified Control.Monad.Writer.Class as W
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
@@ -36,7 +31,6 @@ import Data.Word
 import Network hiding (accept)
 import Network.BSD
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
---import Network.Socket.ByteString
 import System.IO
 import Text.Regex.Posix ((=~))
 
@@ -105,18 +99,17 @@ sender get say = forever $ do
 	(say . runPut . put . join traceShow) =<< get
 
 receiver :: Config -> Handle -> (Msg -> IO ()) -> IO ()
-receiver cfg h say = evalRWST (iterateUntil id (do
-			W.tell () -- satisfy the typechecker
+receiver cfg h say = runReaderT (runMState (iterateUntil id (do
 			mp <- liftIO $ try $ recvPacket h
 			case mp of
 				Left (e :: SomeException) -> do
 					return $ putStrLn $ show e
 					return True
 				Right p -> do
-					handleMsg say p
+					forkM $ handleMsg say p
 					return False
 		) >> return ()
-	) cfg emptyState >> return ()
+	) emptyState) cfg >> return ()
 
 handleMsg say p = do
 	let Msg typ t m = p
