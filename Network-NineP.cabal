@@ -1,15 +1,24 @@
 Name:                Network-NineP
 Version:             0.0.2
-Description:         High-level 9P library
-Synopsis:            High-level 9P library
+Description:         A library providing one with a somewhat higher level interface to 9P2000 protocol than existing implementations. Designed to facilitate rapid development of synthetic filesystems.
+Synopsis:            High-level abstraction over 9P protocol
 Maintainer:          Sergey Alirzaev <zl29ah@gmail.com>
 License:             OtherLicense
 Category:            Network
 License-file:        LICENSE
 Build-Type:          Simple
-Cabal-Version:       >=1.2
+Cabal-Version:       >= 1.6
 Stability:           Experimental
 Tested-With:         GHC == 7.4.2
+
+Source-repository head
+  type:              darcs
+  location:          http://kawais.org.ua/repos/highNineP/
+
+Source-repository this
+  type:              darcs
+  location:          http://kawais.org.ua/repos/highNineP/
+  tag:               0.0.2
 
 Library
   Build-Depends:
