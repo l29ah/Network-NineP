@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
 
 module Network.NineP.Internal.Msg
 	( Config(..)
@@ -18,6 +18,7 @@ module Network.NineP.Internal.Msg
 	) where
 
 import Control.Concurrent.MState hiding (put)
+import Control.Monad.EmbedIO
 import Control.Monad.Reader
 import Data.Binary.Put
 import Data.Bits
@@ -32,12 +33,12 @@ import Network.NineP.Error
 import Network.NineP.Internal.File
 import Network.NineP.Internal.State
 
-checkPerms :: NineFile -> Word8 -> Nine ()
+checkPerms :: (Monad m, EmbedIO m) => NineFile m -> Word8 -> Nine m ()
 checkPerms f want = do
 	s <- getStat f
 	checkPerms' (st_mode s) want
 
-checkPerms' :: Word32 -> Word8 -> Nine ()
+checkPerms' :: (Monad m, EmbedIO m) => Word32 -> Word8 -> Nine m ()
 checkPerms' have want = do
 	-- TODO stop presuming we are owners
 	let checkRead = unless (testBit have 2) $ throwError EPermissionDenied
@@ -57,25 +58,24 @@ checkPerms' have want = do
 getQidTyp :: Stat -> Word8
 getQidTyp s = fromIntegral $ shift (st_mode s) 24
 
-makeQid :: NineFile -> Nine Qid
+makeQid :: (Monad m, EmbedIO m) => NineFile m -> Nine m Qid
 makeQid x = do
 	s <- getStat x
 	return $ Qid (getQidTyp s) 0 42
 
-rversion :: Msg -> Nine [Msg]
+rversion :: Msg -> Nine m [Msg]
 rversion (Msg _ t (Tversion s v)) = do
 	let ver = readVersion v
 	lift $ modifyM_ (\st -> st { msize = s, protoVersion = ver })
 	return $ return $ Msg TRversion t $ Rversion s $ show ver
 
-rattach :: Msg -> Nine [Msg]
 rattach (Msg _ t (Tattach fid _ _ _)) = do
 	root <- asks root
 	insert fid root
 	q <- makeQid root
 	return $ return $ Msg TRattach t $ Rattach q 
 
-desc :: NineFile -> String -> ErrorT NineError IO NineFile
+desc :: (Monad m, EmbedIO m) => NineFile m -> String -> ErrorT NineError m (NineFile m)
 desc f ".." = do
 	mp <- lift $ parent f
 	return $ case mp of
@@ -83,34 +83,33 @@ desc f ".." = do
 		Nothing -> f
 desc f s = descend f s
 
-walk :: [Qid] -> [String] -> NineFile -> Nine (NineFile, [Qid])
+walk :: (Monad m, EmbedIO m) => [Qid] -> [String] -> NineFile m -> Nine m (NineFile m, [Qid])
 walk qs [] f = return (f, qs)
 walk qs (x:xs) (RegularFile {}) = throwError ENotADir
 walk qs (x:xs) d@(Directory {}) = do
-	f <- mapErrorT (lift . lift) $ desc d x
+	f <- mapErrorT call $ desc d x
 	q <- makeQid f
 	walk (q:qs) xs f
 
+walk' :: (Monad m, EmbedIO m) => [String] -> NineFile m -> Nine m (NineFile m, [Qid])
 walk' = walk []
 
-rwalk :: Msg -> Nine [Msg]
 rwalk (Msg _ t (Twalk fid newfid path)) = do
 	f <- lookup fid
 	(nf, qs) <- walk' path f
 	insert newfid nf
 	return $ return $ Msg TRwalk t $ Rwalk $ qs
 
-getStat :: NineFile -> Nine Stat
+getStat :: (Monad m, EmbedIO m) => NineFile m -> Nine m Stat
 getStat f = do
 	let fixDirBit = (case f of
 				(RegularFile {}) -> flip clearBit 31
 				(Directory {}) -> flip setBit 31
 			)
-	s <- lift $ lift $ lift $ stat f
+	s <- lift $ call $ stat f
 	return s { st_mode = fixDirBit $ st_mode s,
 		st_qid = (st_qid s) { qid_typ = getQidTyp s } }
 	
-rstat :: Msg -> Nine [Msg]
 rstat (Msg _ t (Tstat fid)) = do
 	f <- lookup fid
 	case f of
@@ -121,20 +120,17 @@ rstat (Msg _ t (Tstat fid)) = do
 			mys <- getStat f
 			return $ return $ Msg TRstat t $ Rstat $ return $ mys
 
-rclunk :: Msg -> Nine [Msg]
 rclunk (Msg _ t (Tclunk fid)) = do
 	delete fid
 	return $ return $ Msg TRclunk t $ Rclunk
 
-rauth :: Msg -> Nine [Msg]
 rauth (Msg {}) = do
 	throwError ENoAuthRequired
 
-open :: NineFile -> Nine Qid
+open :: (Monad m, EmbedIO m) => NineFile m -> Nine m Qid
 open f = do
 	makeQid $ f
 
-ropen :: Msg -> Nine [Msg]
 ropen (Msg _ t (Topen fid mode)) = do
 	f <- lookup fid
 	checkPerms f mode
@@ -142,7 +138,7 @@ ropen (Msg _ t (Topen fid mode)) = do
 	iou <- iounit
 	return $ return $ Msg TRopen t $ Ropen q iou
 
-rread :: Msg -> Nine [Msg]
+rread :: (Monad m, EmbedIO m) => Msg -> Nine m [Msg]
 rread (Msg _ t (Tread fid offset count)) = do
 	f <- lookup fid
 	u <- iounit
@@ -152,37 +148,34 @@ rread (Msg _ t (Tread fid offset count)) = do
 			let (a, b) = B.splitAt s d in a : splitMsg' b s
 	case f of
 		RegularFile {} -> do
-			d <- mapErrorT (lift . lift) $ (read f) offset count
+			d <- mapErrorT call $ (read f) offset count
 			mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		Directory {} -> do
-			contents <- lift $ lift $ lift $ getFiles f
+			contents <- lift $ call $ getFiles f
 			s <- mapM getStat $ contents
 			let d = runPut $ mapM_ put s
 			mapM (return . Msg TRread t . Rread) $ splitMsg (B.drop (fromIntegral offset) d) $ fromIntegral u
 		
-rwrite :: Msg -> Nine [Msg]
+--rwrite :: Msg -> Nine m [Msg]
 rwrite (Msg _ t (Twrite fid offset d)) = do
 	f <- lookup fid
 	checkPerms f 1
 	case f of
 		Directory {} -> throwError EDir
 		RegularFile {} -> do
-			c <- mapErrorT (lift . lift) $ (write f) offset d
+			c <- mapErrorT call $ (write f) offset d
 			return $ return $ Msg TRwrite t $ Rwrite c
 
-rwstat :: Msg -> Nine [Msg]
 rwstat (Msg _ t (Twstat fid stat)) = do
 	-- TODO check perms
 	f <- lookup fid
 	throwError $ ENotImplemented "wstat"
 
-rremove :: Msg -> Nine [Msg]
 rremove (Msg _ t (Tremove fid)) = do
 	-- TODO check perms
 	f <- lookup fid
 	throwError $ ENotImplemented "remove"
 
-rcreate :: Msg -> Nine [Msg]
 rcreate (Msg _ t (Tcreate fid name perm mode)) = do
 	-- TODO check perms
 	--dir <- lookup fid
@@ -195,5 +188,4 @@ rcreate (Msg _ t (Tcreate fid name perm mode)) = do
 	-- TODO iounit
 	--return $ return $ Msg TRcreate t $ Rcreate
 
-rflush :: Msg -> Nine [Msg]
 rflush _ = return []

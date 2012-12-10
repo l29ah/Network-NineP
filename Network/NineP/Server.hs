@@ -14,6 +14,7 @@ import Control.Concurrent
 import Control.Concurrent.MState hiding (get, put)
 import Control.Exception
 import Control.Monad
+import Control.Monad.EmbedIO
 import Control.Monad.Loops
 import Control.Monad.Reader
 import Control.Monad.Trans
@@ -34,12 +35,15 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import System.IO
 import Text.Regex.Posix ((=~))
 
-import Debug.Trace
-
 import Network.NineP.Error
 import Network.NineP.Internal.File
 import Network.NineP.Internal.Msg
 import Network.NineP.Internal.State
+
+--import Debug.Trace
+traceShow a b = b
+traceIO :: String -> IO ()
+traceIO a = return ()
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
@@ -66,16 +70,16 @@ listen' hostname port = do
 		return sock)
 
 -- |Run the actual server
-run9PServer :: Config -> IO ()
+run9PServer :: (EmbedIO m) => Config m -> IO ()
 run9PServer cfg = do
 	s <- connection $ addr cfg
 	serve s cfg
 
-serve :: Socket -> Config -> IO ()
+serve :: (EmbedIO m) => Socket -> Config m -> IO ()
 serve s cfg = forever $ accept s >>= (
 		\(s, _) -> (doClient cfg) =<< (liftIO $ socketToHandle s ReadWriteMode))
 
-doClient :: Config -> Handle -> IO ()
+doClient :: (EmbedIO m) => Config m -> Handle -> IO ()
 doClient cfg h = do
 	hSetBuffering h NoBuffering
 	chan <- (newChan :: IO (Chan Msg))
@@ -91,14 +95,14 @@ recvPacket h = do
 	let l = fromIntegral $ runGet getWord32le $ assert (B.length s == 4) s
 	p <- B.hGet h $ l - 4
 	let m = runGet (get :: Get Msg) (B.append s p)
-	print m
+	traceIO $ show m
 	return m
 
 sender :: IO Msg -> (ByteString -> IO ()) -> IO ()
 sender get say = forever $ do
 	(say . runPut . put . join traceShow) =<< get
 
-receiver :: Config -> Handle -> (Msg -> IO ()) -> IO ()
+receiver :: (EmbedIO m) => Config m -> Handle -> (Msg -> IO ()) -> IO ()
 receiver cfg h say = runReaderT (runMState (iterateUntil id (do
 			mp <- liftIO $ try $ recvPacket h
 			case mp of
@@ -109,8 +113,9 @@ receiver cfg h say = runReaderT (runMState (iterateUntil id (do
 					forkM $ handleMsg say p
 					return False
 		) >> return ()
-	) emptyState) cfg >> return ()
+	) (emptyState $ monadState cfg)) cfg >> return ()
 
+handleMsg :: (EmbedIO m) => (Msg -> IO ()) -> Msg -> MState (NineState m) (ReaderT (Config m) IO) ()
 handleMsg say p = do
 	let Msg typ t m = p
 	r <- runErrorT (case typ of
