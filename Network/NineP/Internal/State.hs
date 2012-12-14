@@ -38,10 +38,11 @@ readVersion s = if isPrefixOf "9P2000" s then Ver9P2000 else VerUnknown
 
 -- |Server configuration.
 data Config m = Config {
-		-- |The @/@ directory of the hosted filesystem
+		-- |The @/@ directory of the hosted filesystem.
 		root :: NineFile m,
-		-- |The listening address. The syntax is taken from @Plan 9@ operating system and has the form @unix!/path/to/socket@ for unix socket files, and @tcp!hostname!port@ for tcp sockets.
+		-- |The listening address. The syntax is taken from @Plan 9@ operating system and has the form @unix!\/path\/to\/socket@ for unix socket files, and @tcp!hostname!port@ for tcp sockets.
 		addr :: String,
+		-- |The initial state for the user-supplied monad. Use 'Void' for 'IO'.
 		monadState :: Content m
 	}
 

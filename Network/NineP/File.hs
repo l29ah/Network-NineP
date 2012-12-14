@@ -1,7 +1,7 @@
 -- |
 -- Stability   :  Ultra-Violence
 -- Portability :  I'm too young to die
--- Higher-level file patterns.
+-- Higher-level file patterns. Don't support read/write operations at offsets and handling stat changes as for now.
 
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 
@@ -53,21 +53,34 @@ simpleWrite put offset d = case offset of
 		return $ fromIntegral $ B.length d
 	--_ -> throwError $ OtherError "can't write at offset"
 
-rwFile :: forall m. (EmbedIO m) => String -> Maybe (m ByteString) -> Maybe (ByteString -> m ()) -> NineFile m
+-- |A file that reads and writes using simple user-specified callbacks
+rwFile :: forall m. (EmbedIO m)
+		=> String	-- ^File name
+		-> Maybe (m ByteString)	-- ^Read handler
+		-> Maybe (ByteString -> m ())	-- ^Write handler
+		-> NineFile m
 rwFile name rc wc = (boringFile name :: NineFile m) {
 		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead_) rc,
 		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite_) wc
 	}
 
 -- |A file that reads from and writes to the specified Chans
-chanFile :: forall m. (Monad m, EmbedIO m) => String -> Maybe (Chan ByteString) -> Maybe (Chan ByteString) -> NineFile m
+chanFile :: forall m. (Monad m, EmbedIO m)
+		=> String	-- ^File name
+		-> Maybe (Chan ByteString)	-- ^@Chan@ to read from
+		-> Maybe (Chan ByteString)	-- ^@Chan@ to write to
+		-> NineFile m
 chanFile name rc wc = (boringFile name :: NineFile m) {
 		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead . readChan) rc,
 		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite . writeChan) wc
 	}
 
 -- |A file that reads from and writes to the specified MVars
-mVarFile :: forall m. (Monad m, EmbedIO m) => String -> Maybe (MVar ByteString) -> Maybe (MVar ByteString) -> NineFile m
+mVarFile :: forall m. (Monad m, EmbedIO m)
+		=> String	-- ^File name
+		-> Maybe (MVar ByteString)	-- ^@MVar@ to read from
+		-> Maybe (MVar ByteString)	-- ^@MVar@ to write to
+		-> NineFile m
 mVarFile name rc wc = (boringFile name :: NineFile m) {
 		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead . takeMVar) rc,
 		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite . putMVar) wc

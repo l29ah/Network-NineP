@@ -42,6 +42,7 @@ data NineFile m =
 boringStat :: Stat
 boringStat = Stat 0 0 (Qid 0 0 0) 0o0777 0 0 0 "boring" "root" "root" "root"
 
+-- |A dumb file that can't do anything.
 boringFile :: (Monad m, EmbedIO m) => String -> NineFile m
 boringFile name = RegularFile
         (\_ _ -> return "")
@@ -51,6 +52,7 @@ boringFile name = RegularFile
         (const $ return ())
 	(return 0)
 
+-- |A dumb directory that can't do anything but provide the files it contains.
 boringDir :: (Monad m, EmbedIO m) => String -> [(String, NineFile m)] -> NineFile m
 boringDir name contents = let m = M.fromList contents in Directory {
 	getFiles = (return $ map snd $ contents),
