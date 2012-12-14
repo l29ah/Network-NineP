@@ -13,12 +13,12 @@ Tested-With:         GHC == 7.4.2
 
 Source-repository head
   type:              darcs
-  location:          http://kawais.org.ua/repos/highNineP/
+  location:          http://patch-tag.com/r/L29Ah/Network-NineP
 
 Source-repository this
   type:              darcs
-  location:          http://kawais.org.ua/repos/highNineP/
-  tag:               0.0.2
+  location:          http://patch-tag.com/r/L29Ah/Network-NineP
+  tag:               0.1.0
 
 Library
   Build-Depends:
