@@ -13,6 +13,8 @@ module Network.NineP.File
 
 import Control.Concurrent.Chan
 import Control.Concurrent.MVar
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TVar
 import Control.Exception
 import Control.Monad.EmbedIO
 import Data.ByteString.Lazy.Char8 (ByteString)
@@ -84,4 +86,15 @@ mVarFile :: forall m. (Monad m, EmbedIO m)
 mVarFile name rc wc = (boringFile name :: NineFile m) {
 		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead . takeMVar) rc,
 		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite . putMVar) wc
+	}
+
+-- |A file that reads from and writes to the specified TVars
+tVarFile :: forall m. (Monad m, EmbedIO m)
+		=> String	-- ^File name
+		-> Maybe (TVar ByteString)	-- ^@TVar@ to read from
+		-> Maybe (TVar ByteString)	-- ^@TVar@ to write to
+		-> NineFile m
+tVarFile name rc wc = (boringFile name :: NineFile m) {
+		read = maybe (read $ (boringFile "" :: NineFile m)) (\x -> simpleRead $ atomically $ readTVar x) rc,
+		write = maybe (write $ (boringFile "" :: NineFile m)) (\x -> simpleWrite $ atomically . writeTVar x) wc
 	}
