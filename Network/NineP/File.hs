@@ -80,8 +80,8 @@ heterObj a b = (fst a, snd b)
 nulls :: IOObject a
 nulls = (throw $ Underflow, const $ return ())
 
-chans :: Chan a -> Chan a -> IOObject a
-chans a b = (readChan a, writeChan b)
+chans :: Chan a -> IOObject a
+chans a = (readChan a, writeChan a)
 
 type DataTypeObject a = (a -> ByteString, ByteString -> a)
 
