@@ -3,18 +3,21 @@
 -- Portability :  I'm too young to die
 -- Higher-level file patterns. Don't support read/write operations at offsets and handling stat changes as for now.
 
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, OverloadedStrings #-}
 
 module Network.NineP.File
-	( chanFile
-	, mVarFile
-	, rwFile
+	( rwFile
+	, IOObject
+	, DataTypeObject
+	, simpleFile
+	, heterObj
+	, nulls
+	, chans
+	, lazyByteStrings
+	, booleans
 	) where
 
 import Control.Concurrent.Chan
-import Control.Concurrent.MVar
-import Control.Concurrent.STM
-import Control.Concurrent.STM.TVar
 import Control.Exception
 import Control.Monad.EmbedIO
 import Data.ByteString.Lazy.Char8 (ByteString)
@@ -56,6 +59,7 @@ simpleWrite put offset d = case offset of
 	--_ -> throwError $ OtherError "can't write at offset"
 
 -- |A file that reads and writes using simple user-specified callbacks
+-- TODO remove
 rwFile :: forall m. (EmbedIO m)
 		=> String	-- ^File name
 		-> Maybe (m ByteString)	-- ^Read handler
@@ -66,35 +70,40 @@ rwFile name rc wc = (boringFile name :: NineFile m) {
 		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite_) wc
 	}
 
--- |A file that reads from and writes to the specified Chans
-chanFile :: forall m. (Monad m, EmbedIO m)
-		=> String	-- ^File name
-		-> Maybe (Chan ByteString)	-- ^@Chan@ to read from
-		-> Maybe (Chan ByteString)	-- ^@Chan@ to write to
-		-> NineFile m
-chanFile name rc wc = (boringFile name :: NineFile m) {
-		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead . readChan) rc,
-		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite . writeChan) wc
-	}
+-- TODO docs
+type IOObject a = (IO a, a -> IO ())
 
--- |A file that reads from and writes to the specified MVars
-mVarFile :: forall m. (Monad m, EmbedIO m)
-		=> String	-- ^File name
-		-> Maybe (MVar ByteString)	-- ^@MVar@ to read from
-		-> Maybe (MVar ByteString)	-- ^@MVar@ to write to
-		-> NineFile m
-mVarFile name rc wc = (boringFile name :: NineFile m) {
-		read = maybe (read $ (boringFile "" :: NineFile m)) (simpleRead . takeMVar) rc,
-		write = maybe (write $ (boringFile "" :: NineFile m)) (simpleWrite . putMVar) wc
-	}
+-- FIXME sane errors
+heterObj :: IOObject a -> IOObject a -> IOObject a
+heterObj a b = (fst a, snd b)
 
--- |A file that reads from and writes to the specified TVars
-tVarFile :: forall m. (Monad m, EmbedIO m)
-		=> String	-- ^File name
-		-> Maybe (TVar ByteString)	-- ^@TVar@ to read from
-		-> Maybe (TVar ByteString)	-- ^@TVar@ to write to
+nulls :: IOObject a
+nulls = (throw $ Underflow, const $ return ())
+
+chans :: Chan a -> Chan a -> IOObject a
+chans a b = (readChan a, writeChan b)
+
+type DataTypeObject a = (a -> ByteString, ByteString -> a)
+
+lazyByteStrings :: DataTypeObject ByteString 
+lazyByteStrings = (id, id)
+
+showBool True = "true"
+showBool False = "false"
+readBool s
+	| s == "1" = True
+	| s == "true" = True
+	| s == "0" = False
+	| s == "false" = False
+booleans :: DataTypeObject Bool
+booleans = (showBool, readBool)
+
+simpleFile :: forall a m. (Monad m, EmbedIO m)
+		=> String
+		-> IOObject a
+		-> DataTypeObject a
 		-> NineFile m
-tVarFile name rc wc = (boringFile name :: NineFile m) {
-		read = maybe (read $ (boringFile "" :: NineFile m)) (\x -> simpleRead $ atomically $ readTVar x) rc,
-		write = maybe (write $ (boringFile "" :: NineFile m)) (\x -> simpleWrite $ atomically . writeTVar x) wc
+simpleFile name (rd, wr) (rdc, wrc) = (boringFile name :: NineFile m) {
+		read = simpleRead $ liftM rdc $ rd,
+		write = simpleWrite $ wr . wrc 
 	}

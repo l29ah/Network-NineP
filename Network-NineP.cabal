@@ -1,5 +1,5 @@
 Name:                Network-NineP
-Version:             0.1.1
+Version:             0.2.0
 Description:         A library providing one with a somewhat higher level interface to 9P2000 protocol than existing implementations. Designed to facilitate rapid development of synthetic filesystems.
 Synopsis:            High-level abstraction over 9P protocol
 Maintainer:          Sergey Alirzaev <zl29ah@gmail.com>
@@ -18,7 +18,7 @@ Source-repository head
 Source-repository this
   type:              darcs
   location:          http://patch-tag.com/r/L29Ah/Network-NineP
-  tag:               0.1.1
+  tag:               0.2.0
 
 Library
   Build-Depends:
@@ -32,8 +32,7 @@ Library
     monad-loops >= 0.3.3.0 && < 0.4,
     regex-posix >= 0.95.2 && < 0.96,
     mstate >= 0.2.4 && < 0.3,
-    transformers >= 0.3.0.0 && < 0.4,
-    stm >= 2.4.2 && < 2.5
+    transformers >= 0.3.0.0 && < 0.4
   Exposed-modules:
     Control.Monad.EmbedIO
     Network.NineP
