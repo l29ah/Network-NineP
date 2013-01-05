@@ -1,4 +1,5 @@
 support of typed I/O for File (like special cases for boolean files, etc)
+	classes for IORefs-stuff and Data.Convertible shit
 flush requests
 	registering flush handles
 clunk handler maybe? (as a mean to note the end of the transaction)
