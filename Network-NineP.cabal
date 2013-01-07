@@ -32,12 +32,15 @@ Library
     monad-loops >= 0.3.3.0 && < 0.4,
     regex-posix >= 0.95.2 && < 0.96,
     mstate >= 0.2.4 && < 0.3,
-    transformers >= 0.3.0.0 && < 0.4
+    transformers >= 0.3.0.0 && < 0.4,
+    stateref >= 0.3 && < 0.4,
+    convertible >= 1.0.11.1 && < 1.1
   Exposed-modules:
     Control.Monad.EmbedIO
     Network.NineP
     Network.NineP.Error
     Network.NineP.File
+    Network.NineP.File.Instances
     Network.NineP.Server
   Other-modules:
     Network.NineP.Internal.File

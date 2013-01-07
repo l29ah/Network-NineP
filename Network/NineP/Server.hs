@@ -69,7 +69,7 @@ listen' hostname port = do
 		listen sock maxListenQueue
 		return sock)
 
--- |Run the actual server
+-- |Run the actual server using the supplied configuration.
 run9PServer :: (EmbedIO m) => Config m -> IO ()
 run9PServer cfg = do
 	s <- connection $ addr cfg
