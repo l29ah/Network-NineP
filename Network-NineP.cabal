@@ -9,7 +9,7 @@ License-file:        LICENSE
 Build-Type:          Simple
 Cabal-Version:       >= 1.6
 Stability:           Experimental
-Tested-With:         GHC == 7.6.1
+Tested-With:         GHC == 7.6.3
 
 Source-repository head
   type:              darcs
@@ -27,9 +27,9 @@ Library
     containers >= 0.4.2.1 && < 0.6,
     NineP >= 0.0.2 && < 0.1,
     network >= 2.3.0.14 && < 2.5,
-    binary >= 0.5.1.0 && < 0.7,
+    binary >= 0.5.1.0 && < 0.8,
     mtl >= 2.1.2 && < 2.2,
-    monad-loops >= 0.3.3.0 && < 0.4,
+    monad-loops >= 0.3.3.0 && < 0.5,
     regex-posix >= 0.95.2 && < 0.96,
     mstate >= 0.2.4 && < 0.3,
     transformers >= 0.3.0.0 && < 0.4,
