@@ -12,12 +12,12 @@ Stability:           Experimental
 Tested-With:         GHC == 7.6.3
 
 Source-repository head
-  type:              darcs
-  location:          http://patch-tag.com/r/L29Ah/Network-NineP
+  type:              git
+  location:          https://github.com/l29ah/Network-NineP.git
 
 Source-repository this
-  type:              darcs
-  location:          http://patch-tag.com/r/L29Ah/Network-NineP
+  type:              git
+  location:          https://github.com/l29ah/Network-NineP.git
   tag:               0.2.0
 
 Library
