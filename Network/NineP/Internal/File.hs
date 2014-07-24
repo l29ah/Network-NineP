@@ -32,6 +32,8 @@ data NineFile m =
 		parent :: m (Maybe (NineFile m)),
 		-- |A callback to address a specific file by its name. @.@ and @..@ are handled in the library.
 		descend :: String -> ErrorT NineError m (NineFile m),
+		-- |Create a file under this directory.
+		create :: String -> Word32 -> ErrorT NineError m (NineFile m),
 		remove :: m (),
 		-- |The directory stat must return only stat for @.@.
 		stat :: m Stat,
@@ -52,16 +54,17 @@ boringFile name = RegularFile
         (const $ return ())
 	(return 0)
 
--- |A dumb directory that can't do anything but provide the files it contains.
+-- |A dumb directory that can't do anything but provide the files it contains. An user can create files, but they won't show up in listing and will essentially be 'boringFile's.
 boringDir :: (Monad m, EmbedIO m) => String -> [(String, NineFile m)] -> NineFile m
 boringDir name contents = let m = M.fromList contents in Directory {
 	getFiles = (return $ map snd $ contents),
 	descend = (\x -> case M.lookup x m of
 		Nothing -> throwError $ ENoFile x
 		Just f -> return f),
-        remove = (return ()),
-        stat = (return $ boringStat {st_name = name}),
-        wstat = (const $ return ()),
+	create = (\name perms -> return $ boringFile name),
+	remove = (return ()),
+	stat = (return $ boringStat {st_name = name}),
+	wstat = (const $ return ()),
 	version = (return 0),
 	parent = return Nothing }
 

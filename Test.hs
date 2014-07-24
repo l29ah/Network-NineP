@@ -17,9 +17,10 @@ spamwr _ d = do
 
 boringwr _ c = return $ B.take (fromIntegral c) "i am so very boring"
 
-cfg = Config {
-	root = boringDir "/" [("lol", (boringFile "lol") { write = spamwr })],
-	addr = "unix!/tmp/h9pt"
-}
-
-main = run9PServer cfg
+main = do
+	memd <- memoryDirectory "/" :: IO (NineFile IO)
+	run9PServer $ Config {
+			root = boringDir "/" [("lol", (boringFile "lol") { write = spamwr }), ("memd", memd)],
+			addr = "unix!/tmp/h9pt",
+			monadState = undefined
+		}

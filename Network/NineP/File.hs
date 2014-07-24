@@ -8,7 +8,10 @@
 module Network.NineP.File
 	( simpleFile
 	, simpleFileBy
+	, simpleDirectory
 	, rwFile
+	, memoryFile
+	, memoryDirectory
 	) where
 
 import Control.Concurrent.Chan
@@ -16,7 +19,9 @@ import Control.Exception
 import Control.Monad.EmbedIO
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
+import Data.Bits
 import Data.Convertible.Base
+import Data.IORef
 import Data.StateRef
 import Data.Word
 import Prelude hiding (read)
@@ -25,13 +30,12 @@ import Network.NineP.Error
 import Network.NineP.Internal.File
 
 simpleRead :: (Monad m, EmbedIO m) => m ByteString -> Word64 -> Word32 -> ErrorT NineError m ByteString
-simpleRead get offset count = case offset of
-	_ -> do
+simpleRead get offset count = do
 		r <- lift $ tryE $ get
 		either (throwError . OtherError . (show :: SomeException -> String))
-				(return . B.take (fromIntegral count)) r
-	--_ -> throwError $ OtherError "can't read at offset"
+				(return . B.take (fromIntegral count) . B.drop (fromIntegral offset)) r
 
+-- TODO make it offset-aware
 simpleWrite :: (Monad m, EmbedIO m) => (ByteString -> m ()) -> Word64 -> ByteString -> ErrorT NineError m Word32
 simpleWrite put offset d = case offset of
 	_ -> do
@@ -51,24 +55,63 @@ rwFile :: forall m. (EmbedIO m)
 rwFile name rc wc = simpleFileBy name (maybe (fst nulls) id rc, maybe (snd nulls) id wc) (id, id)
 
 -- FIXME sane errors
+-- |Placeholder source and sink
 nulls :: MonadIO m => (m a, a -> m ())
 nulls = (throw $ Underflow, const $ return ())
 
 -- |A file that reads from and writes to the supplied 'Ref' instances, with converstion to the appropriate types. See 'Network.NineP.File.Instances', 'Data.Convertible.Instances' and 'Data.StateRef.Instances'. Use '()', if the file is meant to be read-only/write-only.
 simpleFile :: forall a b m rr wr. (Monad m, EmbedIO m, ReadRef rr m a, Convertible a ByteString, WriteRef wr m b, Convertible ByteString b)
-		=> String
-		-> rr
-		-> wr
+		=> String	-- ^File name
+		-> rr	-- ^Reading function
+		-> wr	-- ^Writing function
 		-> NineFile m
 simpleFile name rr wr = simpleFileBy name (readReference rr, writeReference wr) (convert, convert)
 
+-- Shouldn't we make it simpler?
 -- |Typeclass-free version of 'simpleFile'.
 simpleFileBy :: forall a b m. (Monad m, EmbedIO m)
-		=> String
-		-> (m a, b -> m ())
-		-> (a -> ByteString, ByteString -> b)
+		=> String	-- ^File name
+		-> (m a, b -> m ())	-- ^Reading and writing handle
+		-> (a -> ByteString, ByteString -> b)	-- ^Type conversion handles
 		-> NineFile m
 simpleFileBy name (rd, wr) (rdc, wrc) = (boringFile name :: NineFile m) {
 		read = simpleRead $ liftM rdc $ rd,
 		write = simpleWrite $ wr . wrc 
 	}
+
+-- |A file that stores its contents in the form of 'IORef' 'ByteString'
+memoryFile :: forall m. (Monad m, EmbedIO m)
+	=> String	-- ^File name
+	-> IO (NineFile m)
+memoryFile name = do
+	c <- newIORef "" :: IO (IORef ByteString)
+	return $ simpleFileBy name (
+			liftIO $ readIORef c,
+			liftIO . writeIORef c
+		) (id, id)
+
+-- |A directory that stores its contents in the form of 'IORef [(String, NineFile m)]'
+simpleDirectory :: forall m. (Monad m, EmbedIO m)
+			=> String	-- ^File name
+			-> (String -> ErrorT NineError m (NineFile m))	-- ^A function for creating new files
+			-> (String -> ErrorT NineError m (NineFile m))	-- ^A function for creating new directories
+			-> IO (NineFile m)
+simpleDirectory name newfile newdir = do
+	files <- newIORef [] :: IO (IORef [(String, NineFile m)])
+	return (boringDir name [] :: NineFile m) {
+		create = \name perms -> do
+			nf <- (if testBit perms 31 then newdir else newfile) name
+			let nelem = (name, nf)
+			liftIO $ atomicModifyIORef' files (\l -> (nelem:l, ()))
+			return nf,
+		getFiles = liftIO $ liftM (map snd) $ readIORef files,
+		descend = \name -> do
+			d <- liftIO $ readIORef files
+			maybe (throwError $ ENoFile name) (return) $ lookup name d
+	}
+
+-- |A composition of a 'simpleDirectory' and a 'memoryFile'
+memoryDirectory :: forall m. (Monad m, EmbedIO m)
+			=> String	-- ^File name
+			-> IO (NineFile m)
+memoryDirectory name = simpleDirectory name (liftIO . memoryFile) (liftIO . memoryDirectory)

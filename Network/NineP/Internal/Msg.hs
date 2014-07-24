@@ -10,10 +10,10 @@ module Network.NineP.Internal.Msg
 	, rclunk
 	, rauth
 	, ropen
+	, rcreate
 	, rread
 	, rwrite
 	, rremove
-	, rcreate
 	, rflush
 	) where
 
@@ -134,9 +134,21 @@ open f = do
 ropen (Msg _ t (Topen fid mode)) = do
 	f <- lookup fid
 	checkPerms f mode
-	q <- open f
+	qid <- open f
 	iou <- iounit
-	return $ return $ Msg TRopen t $ Ropen q iou
+	return $ return $ Msg TRopen t $ Ropen qid iou
+
+rcreate (Msg _ t (Tcreate fid name perm mode)) = do
+	f <- lookup fid
+	-- TODO check permissions to create
+	case f of
+		RegularFile {} -> throwError ENotADir
+		Directory {} -> do
+			nf <- mapErrorT call $ (create f) name perm
+			insert fid nf
+			qid <- open f
+			iou <- iounit
+			return $ return $ Msg TRcreate t $ Rcreate qid iou
 
 rread :: (Monad m, EmbedIO m) => Msg -> Nine m [Msg]
 rread (Msg _ t (Tread fid offset count)) = do
@@ -169,23 +181,12 @@ rwrite (Msg _ t (Twrite fid offset d)) = do
 rwstat (Msg _ t (Twstat fid stat)) = do
 	-- TODO check perms
 	f <- lookup fid
-	throwError $ ENotImplemented "wstat"
+	-- TODO implement
+	return $ return $ Msg TRwstat t $ Rwstat
 
 rremove (Msg _ t (Tremove fid)) = do
 	-- TODO check perms
 	f <- lookup fid
 	throwError $ ENotImplemented "remove"
-
-rcreate (Msg _ t (Tcreate fid name perm mode)) = do
-	-- TODO check perms
-	--dir <- lookup fid
-	if testBit mode 31
-		then do 
-			throwError $ ENotImplemented "create directory"
-		else do
-			throwError $ ENotImplemented "create file"
-	--q <- open f
-	-- TODO iounit
-	--return $ return $ Msg TRcreate t $ Rcreate
 
 rflush _ = return []
