@@ -6,7 +6,8 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts, OverloadedStrings #-}
 
 module Network.NineP.File
-	( simpleFile
+	( isDir
+	, simpleFile
 	, simpleFileBy
 	, simpleDirectory
 	, rwFile
@@ -28,6 +29,11 @@ import Prelude hiding (read)
 
 import Network.NineP.Error
 import Network.NineP.Internal.File
+
+-- |Tests if the file is a directory
+isDir :: Word32	-- ^Permissions
+	-> Bool
+isDir perms = testBit perms 31
 
 simpleRead :: (Monad m, EmbedIO m) => m ByteString -> Word64 -> Word32 -> ErrorT NineError m ByteString
 simpleRead get offset count = do
@@ -100,7 +106,7 @@ simpleDirectory name newfile newdir = do
 	files <- newIORef [] :: IO (IORef [(String, NineFile m)])
 	return (boringDir name [] :: NineFile m) {
 		create = \name perms -> do
-			nf <- (if testBit perms 31 then newdir else newfile) name
+			nf <- (if isDir perms then newdir else newfile) name
 			let nelem = (name, nf)
 			liftIO $ atomicModifyIORef' files (\l -> (nelem:l, ()))
 			return nf,
