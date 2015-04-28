@@ -19,6 +19,7 @@ data NineError =
 	ENoFid Word32 |
 	ENoAuthRequired |
 	EPermissionDenied |
+	EInval |
 	OtherError String
 
 instance Error NineError where
@@ -34,4 +35,5 @@ instance Show NineError where
 	show (ENoFid i) = "fid " ++ show i ++ " is not registered on the server"
 	show ENoAuthRequired = "the server doesn't require any kind of authentication"
 	show EPermissionDenied = "permission denied"
+	show EInval = "Invalid argument"
 	show (OtherError s) = s
