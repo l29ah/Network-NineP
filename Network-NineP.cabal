@@ -46,6 +46,7 @@ Library
     Network.NineP.Internal.File
     Network.NineP.Internal.Msg
     Network.NineP.Internal.State
- 
+  ghc-options: -fno-warn-tabs
+
 Executable test
   Main-is: Test.hs
