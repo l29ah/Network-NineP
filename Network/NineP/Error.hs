@@ -4,14 +4,14 @@
 
 module Network.NineP.Error
 	( NineError(..)
-	, module Control.Monad.Error
 	) where
 
-import Control.Monad.Error
+import Control.Exception
+import Data.Typeable
 import Data.Word
 
 -- |Throwable errors
-data NineError = 
+data NineError =
 	ENotImplemented String |
 	ENotADir |
 	EDir |
@@ -20,11 +20,9 @@ data NineError =
 	ENoAuthRequired |
 	EPermissionDenied |
 	EInval |
-	OtherError String
+	OtherError String deriving (Typeable)
 
-instance Error NineError where
-	noMsg = undefined
-	strMsg = OtherError
+instance Exception NineError
 
 -- |See also: @linux/net/9p/error.c@
 instance Show NineError where

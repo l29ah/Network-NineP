@@ -6,6 +6,7 @@ module Network.NineP.Internal.File
 	, boringDir
 	) where
 
+import Control.Exception
 import Control.Monad.EmbedIO
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Map as M
@@ -18,10 +19,10 @@ data NineFile m =
 	RegularFile {
         	read :: Word64	-- Offset
 			-> Word32 -- Length
-			-> ErrorT NineError m (B.ByteString),	-- Resulting data
+			-> m (B.ByteString),	-- Resulting data
         	write :: Word64	-- Offset
 			-> B.ByteString	-- The written data
-			-> ErrorT NineError m (Word32),	-- Number of bytes written successfully. Should return @0@ in case of an error.
+			-> m (Word32),	-- Number of bytes written successfully. Should return @0@ in case of an error.
 		remove :: m (),
 		stat :: m Stat,
 		wstat :: Stat -> m (),
@@ -31,9 +32,9 @@ data NineFile m =
 		getFiles :: m [NineFile m],
 		parent :: m (Maybe (NineFile m)),
 		-- |A callback to address a specific file by its name. @.@ and @..@ are handled in the library.
-		descend :: String -> ErrorT NineError m (NineFile m),
+		descend :: String -> m (NineFile m),
 		-- |Create a file under this directory.
-		create :: String -> Word32 -> ErrorT NineError m (NineFile m),
+		create :: String -> Word32 -> m (NineFile m),
 		remove :: m (),
 		-- |The directory stat must return only stat for @.@.
 		stat :: m Stat,
@@ -59,7 +60,7 @@ boringDir :: (Monad m, EmbedIO m) => String -> [(String, NineFile m)] -> NineFil
 boringDir name contents = let m = M.fromList contents in Directory {
 	getFiles = (return $ map snd $ contents),
 	descend = (\x -> case M.lookup x m of
-		Nothing -> throwError $ ENoFile x
+		Nothing -> throw $ ENoFile x
 		Just f -> return f),
 	create = (\name perms -> return $ boringFile name),
 	remove = (return ()),

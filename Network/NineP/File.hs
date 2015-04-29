@@ -17,7 +17,9 @@ module Network.NineP.File
 
 import Control.Concurrent.Chan
 import Control.Exception
+import Control.Monad
 import Control.Monad.EmbedIO
+import Control.Monad.Trans
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Bits
@@ -35,19 +37,17 @@ isDir :: Word32	-- ^Permissions
 	-> Bool
 isDir perms = testBit perms 31
 
-simpleRead :: (Monad m, EmbedIO m) => m ByteString -> Word64 -> Word32 -> ErrorT NineError m ByteString
+simpleRead :: (Monad m, EmbedIO m) => m ByteString -> Word64 -> Word32 -> m ByteString
 simpleRead get offset count = do
-		r <- lift $ tryE $ get
-		either (throwError . OtherError . (show :: SomeException -> String))
-				(return . B.take (fromIntegral count) . B.drop (fromIntegral offset)) r
+		r <- get
+		(return . B.take (fromIntegral count) . B.drop (fromIntegral offset)) r
 
 -- TODO make it offset-aware
-simpleWrite :: (Monad m, EmbedIO m) => (ByteString -> m ()) -> Word64 -> ByteString -> ErrorT NineError m Word32
+simpleWrite :: (Monad m, EmbedIO m) => (ByteString -> m ()) -> Word64 -> ByteString -> m Word32
 simpleWrite put offset d = case offset of
 	_ -> do
-		r <- lift $ tryE $ put d
-		either (throwError . OtherError . (show :: SomeException -> String))
-				(const $ return $ fromIntegral $ B.length d) r
+		r <- put d
+		(const $ return $ fromIntegral $ B.length d) r
 	--_ -> throwError $ OtherError "can't write at offset"
 
 
@@ -99,8 +99,8 @@ memoryFile name = do
 -- |A directory that stores its contents in the form of 'IORef [(String, NineFile m)]'
 simpleDirectory :: forall m. (Monad m, EmbedIO m)
 			=> String	-- ^File name
-			-> (String -> ErrorT NineError m (NineFile m))	-- ^A function for creating new files
-			-> (String -> ErrorT NineError m (NineFile m))	-- ^A function for creating new directories
+			-> (String -> m (NineFile m))	-- ^A function for creating new files
+			-> (String -> m (NineFile m))	-- ^A function for creating new directories
 			-> IO (NineFile m)
 simpleDirectory name newfile newdir = do
 	files <- newIORef [] :: IO (IORef [(String, NineFile m)])
@@ -113,7 +113,7 @@ simpleDirectory name newfile newdir = do
 		getFiles = liftIO $ liftM (map snd) $ readIORef files,
 		descend = \name -> do
 			d <- liftIO $ readIORef files
-			maybe (throwError $ ENoFile name) (return) $ lookup name d
+			maybe (throw $ ENoFile name) (return) $ lookup name d
 	}
 
 -- |A composition of a 'simpleDirectory' and a 'memoryFile'

@@ -12,8 +12,9 @@ module Network.NineP.Server
 
 import Control.Concurrent
 import Control.Concurrent.MState hiding (get, put)
-import Control.Exception
+import Control.Exception (assert)
 import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.EmbedIO
 import Control.Monad.Loops
 import Control.Monad.Reader
@@ -118,7 +119,7 @@ receiver cfg h say = runReaderT (runMState (iterateUntil id (do
 handleMsg :: (EmbedIO m) => (Msg -> IO ()) -> Msg -> MState (NineState m) (ReaderT (Config m) IO) ()
 handleMsg say p = do
 	let Msg typ t m = p
-	r <- runErrorT (case typ of
+	r <- try (case typ of
 			TTversion -> rversion p
 			TTattach -> rattach p
 			TTwalk -> rwalk p
@@ -135,4 +136,4 @@ handleMsg say p = do
 		)
 	case r of
 		(Right response) -> liftIO $ mapM_ say $ response
-		(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ fail
+		(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ (fail :: NineError)

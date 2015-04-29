@@ -3,7 +3,7 @@
 -- Portability :  I'm too young to die
 -- Instances for dealing with the usual data.
 
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, OverloadedStrings, OverlappingInstances, ViewPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, OverloadedStrings, ViewPatterns #-}
 
 module Network.NineP.File.Instances
 	( Convertible

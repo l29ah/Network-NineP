@@ -18,6 +18,7 @@ module Network.NineP.Internal.Msg
 	) where
 
 import Control.Concurrent.MState hiding (put)
+import Control.Exception
 import Control.Monad.EmbedIO
 import Control.Monad.Reader
 import Data.Binary.Put
@@ -41,14 +42,14 @@ checkPerms f want = do
 checkPerms' :: (Monad m, EmbedIO m) => Word32 -> Word8 -> Nine m ()
 checkPerms' have want = do
 	-- TODO stop presuming we are owners
-	let checkRead = unless (testBit have 2) $ throwError EPermissionDenied
-	let checkWrite = unless (testBit have 1) $ throwError EPermissionDenied
-	let checkExec = unless (testBit have 0) $ throwError EPermissionDenied
+	let checkRead = unless (testBit have 2) $ throw EPermissionDenied
+	let checkWrite = unless (testBit have 1) $ throw EPermissionDenied
+	let checkExec = unless (testBit have 0) $ throw EPermissionDenied
 	when (testBit want 4) $ do
 		checkWrite
-		throwError $ ENotImplemented "OTRUNC"
+		throw $ ENotImplemented "OTRUNC"
 	when (testBit want 6) $ do
-		throwError $ ENotImplemented "ORCLOSE"
+		throw $ ENotImplemented "ORCLOSE"
 	case want of
 		0 -> checkRead
 		1 -> checkWrite
@@ -66,7 +67,7 @@ makeQid x = do
 rversion :: Msg -> Nine m [Msg]
 rversion (Msg _ t (Tversion s v)) = do
 	let ver = readVersion v
-	lift $ modifyM_ (\st -> st { msize = s, protoVersion = ver })
+	modifyM_ (\st -> st { msize = s, protoVersion = ver })
 	return $ return $ Msg TRversion t $ Rversion s $ show ver
 
 rattach (Msg _ t (Tattach fid _ _ _)) = do
@@ -75,9 +76,9 @@ rattach (Msg _ t (Tattach fid _ _ _)) = do
 	q <- makeQid root
 	return $ return $ Msg TRattach t $ Rattach q 
 
-desc :: (Monad m, EmbedIO m) => NineFile m -> String -> ErrorT NineError m (NineFile m)
+desc :: (Monad m, EmbedIO m) => NineFile m -> String -> m (NineFile m)
 desc f ".." = do
-	mp <- lift $ parent f
+	mp <- parent f
 	return $ case mp of
 		Just p -> p
 		Nothing -> f
@@ -85,9 +86,9 @@ desc f s = descend f s
 
 walk :: (Monad m, EmbedIO m) => [Qid] -> [String] -> NineFile m -> Nine m (NineFile m, [Qid])
 walk qs [] f = return (f, qs)
-walk qs (x:xs) (RegularFile {}) = throwError ENotADir
+walk qs (x:xs) (RegularFile {}) = throw ENotADir
 walk qs (x:xs) d@(Directory {}) = do
-	f <- mapErrorT call $ desc d x
+	f <- call $ desc d x
 	q <- makeQid f
 	walk (q:qs) xs f
 
@@ -106,7 +107,7 @@ getStat f = do
 				(RegularFile {}) -> flip clearBit 31
 				(Directory {}) -> flip setBit 31
 			)
-	s <- lift $ call $ stat f
+	s <- call $ stat f
 	return s { st_mode = fixDirBit $ st_mode s,
 		st_qid = (st_qid s) { qid_typ = getQidTyp s } }
 	
@@ -125,7 +126,7 @@ rclunk (Msg _ t (Tclunk fid)) = do
 	return $ return $ Msg TRclunk t $ Rclunk
 
 rauth (Msg {}) = do
-	throwError ENoAuthRequired
+	throw ENoAuthRequired
 
 open :: (Monad m, EmbedIO m) => NineFile m -> Nine m Qid
 open f = do
@@ -142,9 +143,9 @@ rcreate (Msg _ t (Tcreate fid name perm mode)) = do
 	f <- lookup fid
 	-- TODO check permissions to create
 	case f of
-		RegularFile {} -> throwError ENotADir
+		RegularFile {} -> throw ENotADir
 		Directory {} -> do
-			nf <- mapErrorT call $ (create f) name perm
+			nf <- call $ (create f) name perm
 			insert fid nf
 			qid <- open f
 			iou <- iounit
@@ -160,10 +161,10 @@ rread (Msg _ t (Tread fid offset count)) = do
 			let (a, b) = B.splitAt s d in a : splitMsg' b s
 	case f of
 		RegularFile {} -> do
-			d <- mapErrorT call $ (read f) offset count
+			d <- call $ (read f) offset count
 			mapM (return . Msg TRread t . Rread) $ splitMsg d $ fromIntegral u
 		Directory {} -> do
-			contents <- lift $ call $ getFiles f
+			contents <- call $ getFiles f
 			s <- mapM getStat $ contents
 			let d = runPut $ mapM_ put s
 			mapM (return . Msg TRread t . Rread) $ splitMsg (B.drop (fromIntegral offset) d) $ fromIntegral u
@@ -173,9 +174,9 @@ rwrite (Msg _ t (Twrite fid offset d)) = do
 	f <- lookup fid
 	checkPerms f 1
 	case f of
-		Directory {} -> throwError EDir
+		Directory {} -> throw EDir
 		RegularFile {} -> do
-			c <- mapErrorT call $ (write f) offset d
+			c <- call $ (write f) offset d
 			return $ return $ Msg TRwrite t $ Rwrite c
 
 rwstat (Msg _ t (Twstat fid stat)) = do
@@ -187,6 +188,6 @@ rwstat (Msg _ t (Twstat fid stat)) = do
 rremove (Msg _ t (Tremove fid)) = do
 	-- TODO check perms
 	f <- lookup fid
-	throwError $ ENotImplemented "remove"
+	throw $ ENotImplemented "remove"
 
 rflush _ = return []
