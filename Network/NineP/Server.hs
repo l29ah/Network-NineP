@@ -136,4 +136,5 @@ handleMsg say p = do
 		)
 	case r of
 		(Right response) -> liftIO $ mapM_ say $ response
-		(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ (fail :: NineError)
+		-- FIXME which exceptions should i catch?
+		(Left fail) -> liftIO $ say $ Msg TRerror t $ Rerror $ show $ (fail :: SomeException)
