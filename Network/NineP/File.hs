@@ -101,10 +101,10 @@ simpleDirectory :: forall m. (Monad m, EmbedIO m)
 			=> String	-- ^File name
 			-> (String -> m (NineFile m))	-- ^A function for creating new files
 			-> (String -> m (NineFile m))	-- ^A function for creating new directories
-			-> IO (NineFile m)
+			-> IO (NineFile m, IORef [(String, NineFile m)])
 simpleDirectory name newfile newdir = do
 	files <- newIORef [] :: IO (IORef [(String, NineFile m)])
-	return (boringDir name [] :: NineFile m) {
+	return $ (\f -> (f, files)) $ (boringDir name [] :: NineFile m) {
 		create = \name perms -> do
 			nf <- (if isDir perms then newdir else newfile) name
 			let nelem = (name, nf)
@@ -120,4 +120,4 @@ simpleDirectory name newfile newdir = do
 memoryDirectory :: forall m. (Monad m, EmbedIO m)
 			=> String	-- ^File name
 			-> IO (NineFile m)
-memoryDirectory name = simpleDirectory name (liftIO . memoryFile) (liftIO . memoryDirectory)
+memoryDirectory name = liftM fst $ simpleDirectory name (liftIO . memoryFile) (liftIO . memoryDirectory)
