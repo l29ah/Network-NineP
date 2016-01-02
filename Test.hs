@@ -4,6 +4,7 @@ import Control.Exception
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Word
+import System.Log.Logger
 
 import Network.NineP as N
 import Network.NineP.Error
@@ -18,6 +19,7 @@ spamwr _ d = do
 boringwr _ c = return $ B.take (fromIntegral c) "i am so very boring"
 
 main = do
+	updateGlobalLogger "Network.NineP" $ setLevel DEBUG
 	memd <- memoryDirectory "/" :: IO (NineFile IO)
 	run9PServer $ Config {
 			-- TODO Data.Default?

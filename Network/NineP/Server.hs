@@ -34,17 +34,13 @@ import Network hiding (accept)
 import Network.BSD
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import System.IO
+import System.Log.Logger
 import Text.Regex.Posix ((=~))
 
 import Network.NineP.Error
 import Network.NineP.Internal.File
 import Network.NineP.Internal.Msg
 import Network.NineP.Internal.State
-
---import Debug.Trace
-traceShow a b = b
-traceIO :: String -> IO ()
-traceIO a = return ()
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
@@ -96,12 +92,14 @@ recvPacket h = do
 	let l = fromIntegral $ runGet getWord32le $ assert (B.length s == 4) s
 	p <- B.hGet h $ l - 4
 	let m = runGet (get :: Get Msg) (B.append s p)
-	traceIO $ show m
+	debugM "Network.NineP.Server" $ show m
 	return m
 
 sender :: IO Msg -> (ByteString -> IO ()) -> IO ()
 sender get say = forever $ do
-	(say . runPut . put . join traceShow) =<< get
+	msg <- get
+	debugM "Network.NineP.Server" $ show msg
+	say $ runPut $ put msg
 
 receiver :: (EmbedIO m) => Config m -> Handle -> (Msg -> IO ()) -> IO ()
 receiver cfg h say = runReaderT (runMState (iterateUntil id (do
