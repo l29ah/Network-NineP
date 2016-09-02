@@ -1,5 +1,5 @@
 Name:                Network-NineP
-Version:             0.4.0
+Version:             0.4.1
 Description:         A library providing one with a somewhat higher level interface to 9P2000 protocol than existing implementations. Designed to facilitate rapid development of synthetic filesystems.
 Synopsis:            High-level abstraction over 9P protocol
 Maintainer:          Sergey Alirzaev <zl29ah@gmail.com>
@@ -18,7 +18,7 @@ Source-repository head
 Source-repository this
   type:              git
   location:          https://github.com/l29ah/Network-NineP.git
-  tag:               0.4.0
+  tag:               0.4.1
 
 Library
   Build-Depends:
