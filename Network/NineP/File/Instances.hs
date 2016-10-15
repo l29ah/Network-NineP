@@ -6,10 +6,10 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, OverloadedStrings, ViewPatterns #-}
 
 module Network.NineP.File.Instances
-	( Convertible
-	, ReadRef
-	, WriteRef
-	) where
+    ( Convertible
+    , ReadRef
+    , WriteRef
+    ) where
 
 import Control.Concurrent.Chan
 import Control.Monad
@@ -38,30 +38,30 @@ safeRead (reads -> [(v,"")]) = Just v
 safeRead _ = Nothing
 
 instance Convertible ByteString ByteString where
-	safeConvert = Right . id
+    safeConvert = Right . id
 
 instance Convertible () ByteString where
-	safeConvert x = convError "impossible to read that" x
+    safeConvert x = convError "impossible to read that" x
 instance Convertible ByteString () where
-	safeConvert _ = Right ()
+    safeConvert _ = Right ()
 
 instance Convertible ByteString Bool where
-	safeConvert s
-		| l == "1" = Right True
-		| l == "true" = Right True
-		| l == "0" = Right False
-		| l == "false" = Right False
-		| otherwise = convError "doesn't look like a boolean value" l
-			where l = trim $ B.unpack s
+    safeConvert s
+        | l == "1" = Right True
+        | l == "true" = Right True
+        | l == "0" = Right False
+        | l == "false" = Right False
+        | otherwise = convError "doesn't look like a boolean value" l
+            where l = trim $ B.unpack s
 instance Convertible Bool ByteString where
-	safeConvert True = Right "true"
-	safeConvert False = Right "false"
+    safeConvert True = Right "true"
+    safeConvert False = Right "false"
 
 instance (Show a, Num a) => Convertible a ByteString where
-	safeConvert = Right . B.pack . show 
+    safeConvert = Right . B.pack . show 
 instance (Read a, Num a, Typeable a) => Convertible ByteString a where
-	safeConvert s = maybe (convError "doesn't look like an integral value" l) id $ liftM Right =<< safeRead l
-			where l = trim $ B.unpack s
+    safeConvert s = maybe (convError "doesn't look like an integral value" l) id $ liftM Right =<< safeRead l
+            where l = trim $ B.unpack s
 
 -- TODO sane error
 instance ReadRef () m ByteString where

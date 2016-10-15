@@ -3,3 +3,4 @@ cabal-dev
 *.hi
 *.o
 *.swp
+.stack-work
