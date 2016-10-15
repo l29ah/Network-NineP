@@ -47,8 +47,8 @@ maybeRead = fmap fst . listToMaybe . reads
 
 connection :: String -> IO Socket
 connection s = let    pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
-            wrongAddr = ioError $ userError $ "wrong 9p connection address: " ++ s
-            (bef, _, aft, grps) = s =~ pat :: (String, String, String, [String])
+                      wrongAddr = ioError $ userError $ "wrong 9p connection address: " ++ s
+                      (bef, _, aft, grps) = s =~ pat :: (String, String, String, [String])
     in if (bef /= "" || aft /= "" || grps == [])
         then wrongAddr
         else case grps of

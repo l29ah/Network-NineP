@@ -157,8 +157,10 @@ rread (Msg _ t (Tread fid offset count)) = do
     u <- iounit
     checkPerms f 0
     let    splitMsg d s = let r = splitMsg' d s in if null r then [B.empty] else r
-        splitMsg' d s = if B.null d then [] else
-            let (a, b) = B.splitAt s d in a : splitMsg' b s
+           splitMsg' d s =
+             if B.null d
+             then []
+             else let (a, b) = B.splitAt s d in a : splitMsg' b s
     case f of
         RegularFile {} -> do
             d <- call $ (read f) offset count
