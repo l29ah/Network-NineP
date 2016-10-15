@@ -4,3 +4,4 @@ cabal-dev
 *.o
 *.swp
 .stack-work
+stack.yaml
