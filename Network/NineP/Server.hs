@@ -59,10 +59,10 @@ connection s = let	pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
 listen' :: HostName -> PortNumber -> IO Socket
 listen' hostname port = do
 	proto <- getProtocolNumber "tcp"
-	bracketOnError (socket AF_INET Stream proto) Network.Socket.sClose (\sock -> do
+	bracketOnError (socket AF_INET Stream proto) close (\sock -> do
 		setSocketOption sock ReuseAddr 1
 		he <- getHostByName hostname
-		bindSocket sock (SockAddrInet port (hostAddress he))
+		bind sock (SockAddrInet port (hostAddress he))
 		listen sock maxListenQueue
 		return sock)
 
