@@ -53,4 +53,13 @@ Library
 
 Executable test
   Main-is: Test.hs
+  Other-modules:
+    Control.Monad.EmbedIO
+    Network.NineP
+    Network.NineP.Error
+    Network.NineP.File
+    Network.NineP.Internal.File
+    Network.NineP.Internal.Msg
+    Network.NineP.Internal.State
+    Network.NineP.Server
   ghc-options: -fno-warn-tabs
