@@ -14,6 +14,7 @@ module Network.NineP.Internal.State
 	, call
 	) where
 
+import Control.Concurrent.Async
 import Control.Concurrent.MState
 import Control.Exception (throw)
 import Control.Exception.Peel as P
@@ -52,6 +53,7 @@ data Config m = Config {
 
 data NineState m = NineState {
 		fidMap :: Map Word32 (NineFile m),
+		flushMap :: Map Word16 (IO ()),
 		msize :: Word32,
 		protoVersion :: NineVersion,
 		mState :: Content m
@@ -59,6 +61,7 @@ data NineState m = NineState {
 
 emptyState m = NineState {
 	fidMap = M.empty :: Map Word32 (NineFile m),
+	flushMap = M.empty :: Map Word16 (IO ()),
 	msize = 0,
 	protoVersion = VerUnknown,
 	mState = m
@@ -71,10 +74,12 @@ instance MonadThrow m => MonadThrow (MState s m) where
 instance (MonadCatch m, MonadPeelIO m) => MonadCatch (MState s m) where
 	catch = P.catch
 
-call :: (EmbedIO m) => m a -> MState (NineState m) (ReaderT (Config m) IO) a
-call x = do
+call :: (EmbedIO m) => Word16 -> m a -> MState (NineState m) (ReaderT (Config m) IO) a
+call tag x = do
 	s <- (return . mState) =<< get
-	lift $ lift $ callback x s
+	thread <- liftIO $ async $ callback x s
+	flushable tag thread
+	lift $ lift $ wait thread
 
 lookup :: Word32 -> Nine m (NineFile m)
 lookup fid = do
@@ -97,3 +102,13 @@ iounit = do
 	ms <- (return . msize) =<< get
 	-- 23 is the biggest size of a message (write), but libixp uses 24, so we do too to stay safe
 	return $ ms - 24
+
+flushable :: Word16 -> Async a -> Nine m ()
+flushable tag thread = modifyM_ (\s -> s { flushMap = M.insert tag (cancel thread) $ flushMap s })
+
+flush :: Word16 -> Nine m ()
+flush tag = do
+	m <- (return . flushMap) =<< get
+	case M.lookup tag m of
+		Nothing -> return ()
+		Just handler -> lift $ lift handler
