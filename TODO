@@ -1,4 +1,2 @@
-flush requests
-	registering flush handles
 clunk handler maybe? (as a mean to note the end of the transaction)
 stat support
