@@ -30,7 +30,6 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.NineP
 import Data.Word
-import Network hiding (accept)
 import Network.BSD
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import System.IO
@@ -45,6 +44,12 @@ import Network.NineP.Internal.State
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
+listenOn addr = do
+	sock <- socket AF_UNIX Stream defaultProtocol
+	bind sock addr
+	listen sock 5
+	return sock
+
 connection :: String -> IO Socket
 connection s = let	pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
 			wrongAddr = ioError $ userError $ "wrong 9p connection address: " ++ s
@@ -53,7 +58,7 @@ connection s = let	pat = "tcp!(.*)!([0-9]*)|unix!(.*)" :: ByteString
 		then wrongAddr
 		else case grps of
 			[addr, port, ""] -> listen' addr $ toEnum $ (fromMaybe 2358 $ maybeRead port :: Int)
-			["", "", addr]  -> listenOn $ UnixSocket addr
+			["", "", addr]  -> listenOn $ SockAddrUnix addr
 			_ -> wrongAddr
 
 listen' :: HostName -> PortNumber -> IO Socket
