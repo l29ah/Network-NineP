@@ -111,7 +111,7 @@ receiver cfg h say = runReaderT (runMState (iterateUntil id (do
 			mp <- liftIO $ try $ recvPacket h
 			case mp of
 				Left (e :: SomeException) -> do
-					return $ putStrLn $ show e
+					pure $ errorM "Network.NineP.Server" $ show e
 					return True
 				Right p -> do
 					forkM $ handleMsg say p
