@@ -68,6 +68,7 @@ rversion :: Msg -> Nine m [Msg]
 rversion (Msg _ t (Tversion s v)) = do
 	let ver = readVersion v
 	modifyM_ (\st -> st { msize = s, protoVersion = ver })
+	-- FIXME clunk everything and abort all outstanding I/O
 	return $ return $ Msg TRversion t $ Rversion s $ show ver
 
 rattach (Msg _ t (Tattach fid _ _ _)) = do
