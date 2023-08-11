@@ -19,6 +19,7 @@ module Network.NineP.Internal.Msg
 
 import Control.Concurrent.MState hiding (put)
 import Control.Exception
+import Control.Monad
 import Control.Monad.EmbedIO
 import Control.Monad.Reader
 import Data.Binary.Put
